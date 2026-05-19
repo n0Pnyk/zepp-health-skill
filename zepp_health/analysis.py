@@ -491,4 +491,9 @@ def generate_snapshot(
         snapshot["today"]["stress"]["min"] = today_stress.min_stress
         snapshot["today"]["stress"]["max"] = today_stress.max_stress
 
+    # Add warnings for failed API calls
+    errors = data.get("_errors", set())
+    if errors:
+        snapshot["_warnings"] = [f"Failed to fetch: {e}" for e in sorted(errors)]
+
     return snapshot

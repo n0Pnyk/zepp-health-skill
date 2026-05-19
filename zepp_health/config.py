@@ -99,6 +99,11 @@ def _config_search_paths(config_path: str | None = None) -> list[Path]:
     if env_path:
         paths.append(Path(env_path).expanduser())
 
+    # Package directory (skill root / project root)
+    _package_dir = Path(__file__).resolve().parent.parent
+    if _package_dir.is_dir():
+        paths.append(_package_dir / "config.json")
+
     # Current directory
     paths.append(Path.cwd() / "config.json")
 
