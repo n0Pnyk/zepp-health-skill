@@ -1,0 +1,9 @@
+{
+  "app_token": "your_app_token_here",
+  "user_id": "your_user_id_here",
+  "host": "api-mifit-cn3.zepp.com",
+  "timezone": "Asia/Shanghai",
+  "app_platform": "ios_phone",
+  "lang": "zh",
+  "country": "CN"
+}
