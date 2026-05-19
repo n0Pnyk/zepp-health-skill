@@ -185,12 +185,29 @@ def generate_daily_report(
 
     # --- Compute scores ---
 
+    # 7-day HRV/RHR averages for recovery (more robust than single-day)
+    hrv_avg_7d: int | None = None
+    rhr_avg_7d: int | None = None
+    hrv_recent = [r.sleep_hrv or r.hrv_baseline for r in readiness_history[-7:] if (r.sleep_hrv and r.sleep_hrv > 0) or (r.hrv_baseline and r.hrv_baseline > 0)]
+    rhr_recent = [r.sleep_rhr or r.rhr_baseline for r in readiness_history[-7:] if (r.sleep_rhr and r.sleep_rhr > 0) or (r.rhr_baseline and r.rhr_baseline > 0)]
+    if hrv_recent:
+        hrv_avg_7d = int(sum(hrv_recent) / len(hrv_recent))
+    if rhr_recent:
+        rhr_avg_7d = int(sum(rhr_recent) / len(rhr_recent))
+
+    # Personalized max HR from 28-day workouts
+    from zepp_health.scoring import get_personalized_max_hr
+    max_hr = get_personalized_max_hr(workouts_28d)
+    resting_hr = rhr_avg_7d or today_rhr or 60
+
     recovery = compute_recovery(
         today_hrv=today_hrv,
         today_rhr=today_rhr,
         hrv_history=hrv_history,
         rhr_history=rhr_history,
         readiness=today_readiness,
+        hrv_avg_7d=hrv_avg_7d,
+        rhr_avg_7d=rhr_avg_7d,
     )
 
     sleep_quality = compute_sleep_quality(sleep)
@@ -199,6 +216,8 @@ def generate_daily_report(
         workouts_7d=workouts_7d,
         workouts_28d=workouts_28d,
         sport_load=sport_load,
+        resting_hr=resting_hr,
+        max_hr=max_hr,
     )
 
     overall_score = compute_overall(
@@ -325,20 +344,48 @@ def generate_snapshot(
 
     # --- Compute scores ---
 
+    # 7-day HRV/RHR averages for recovery (more robust than single-day)
+    hrv_avg_7d: int | None = None
+    rhr_avg_7d: int | None = None
+    hrv_recent = [r.sleep_hrv or r.hrv_baseline for r in readiness_history[-7:] if (r.sleep_hrv and r.sleep_hrv > 0) or (r.hrv_baseline and r.hrv_baseline > 0)]
+    rhr_recent = [r.sleep_rhr or r.rhr_baseline for r in readiness_history[-7:] if (r.sleep_rhr and r.sleep_rhr > 0) or (r.rhr_baseline and r.rhr_baseline > 0)]
+    if hrv_recent:
+        hrv_avg_7d = int(sum(hrv_recent) / len(hrv_recent))
+    if rhr_recent:
+        rhr_avg_7d = int(sum(rhr_recent) / len(rhr_recent))
+
+    # Personalized max HR from 28-day workouts
+    from zepp_health.scoring import get_personalized_max_hr
+    max_hr = get_personalized_max_hr(workouts_28d)
+    resting_hr = rhr_avg_7d or today_rhr or 60
+
     recovery = compute_recovery(
         today_hrv=today_hrv,
         today_rhr=today_rhr,
         hrv_history=hrv_history,
         rhr_history=rhr_history,
         readiness=today_readiness,
+        hrv_avg_7d=hrv_avg_7d,
+        rhr_avg_7d=rhr_avg_7d,
     )
 
-    sleep_quality = compute_sleep_quality(sleep)
+    # Sleep with SOL and consistency
+    sleep_times: list[tuple[int, int]] = []
+    daily_7d = data.get("daily_7d") or []
+    for d in daily_7d:
+        if d.sleep and d.sleep.start_time and d.sleep.end_time:
+            sleep_start_min = d.sleep.start_time.hour * 60 + d.sleep.start_time.minute
+            wake_end_min = d.sleep.end_time.hour * 60 + d.sleep.end_time.minute
+            sleep_times.append((sleep_start_min, wake_end_min))
+
+    sleep_quality = compute_sleep_quality(sleep, sleep_times=sleep_times)
 
     exertion = compute_exertion(
         workouts_7d=workouts_7d,
         workouts_28d=workouts_28d,
         sport_load=sport_load,
+        resting_hr=resting_hr,
+        max_hr=max_hr,
     )
 
     overall_score = compute_overall(

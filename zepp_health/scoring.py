@@ -15,6 +15,7 @@ from typing import Optional
 from zepp_health.models import (
     ExertionScore,
     HealthReport,
+    HeartRateZone,
     ReadinessData,
     RecoveryScore,
     SleepData,
@@ -118,6 +119,74 @@ def _compute_trend(values: list[float], window: int = 7) -> str:
     return "stable"
 
 
+def get_personalized_max_hr(
+    workouts: list[Workout],
+    default_age: int = 30,
+) -> int:
+    """Derive personalized max heart rate from recent workout data.
+
+    Priority:
+    1. Actual max HR observed in 28-day workouts
+    2. Max HR from HR zone data
+    3. Fallback: 220 - age (Fox formula)
+    """
+    max_hr_values: list[int] = []
+
+    for w in workouts:
+        if w.max_heart_rate and w.max_heart_rate > 0:
+            max_hr_values.append(w.max_heart_rate)
+        if w.hr_zones:
+            for z in w.hr_zones:
+                if z.max_hr and z.max_hr > 0:
+                    max_hr_values.append(z.max_hr)
+
+    if max_hr_values:
+        return max(max_hr_values)
+
+    return 220 - default_age
+
+
+def compute_hr_threshold(
+    max_hr: int,
+    resting_hr: int,
+) -> int:
+    """Compute personalized HR threshold for exertion tracking.
+
+    Threshold = RHR + HRR * 0.45 (Karvonen formula at ~45% intensity).
+    Athlytic uses a similar approach with personalized thresholds.
+    """
+    hrr = max_hr - resting_hr
+    return int(resting_hr + hrr * 0.45)
+
+
+def compute_time_above_threshold(
+    workouts_7d: list[Workout],
+    hr_threshold: int,
+) -> float:
+    """Compute total minutes spent above HR threshold in 7-day workouts.
+
+    Uses HR zone data when available, falls back to duration-based estimate.
+    """
+    total_minutes = 0.0
+
+    for w in workouts_7d:
+        if not w.duration_seconds or w.duration_seconds <= 0:
+            continue
+
+        if w.hr_zones:
+            # Sum time in zones where max_hr >= threshold
+            above_seconds = sum(
+                z.seconds for z in w.hr_zones
+                if z.max_hr and z.max_hr >= hr_threshold
+            )
+            total_minutes += above_seconds / 60
+        elif w.avg_heart_rate and w.avg_heart_rate >= hr_threshold:
+            # Fallback: if avg HR is above threshold, count full duration
+            total_minutes += w.duration_seconds / 60
+
+    return total_minutes
+
+
 # ============================================================
 # Recovery Score
 # ============================================================
@@ -129,10 +198,13 @@ def compute_recovery(
     hrv_history: list[int],
     rhr_history: list[int],
     readiness: Optional[ReadinessData] = None,
+    hrv_avg_7d: Optional[int] = None,
+    rhr_avg_7d: Optional[int] = None,
 ) -> RecoveryScore:
     """Compute recovery score (0-100).
 
     Based on comparison of HRV and RHR against 60-day rolling baseline.
+    Uses 7-day average vs 60-day baseline (more robust than single-day).
     HRV weight: 0.6, RHR weight: 0.4.
 
     If insufficient history data, falls back to Zepp's built-in readiness_score.
@@ -153,17 +225,21 @@ def compute_recovery(
             rhr_mean = float(readiness.rhr_baseline)
             rhr_std = rhr_mean * 0.08
 
+    # Use 7-day average for comparison (more robust than single-day)
+    compare_hrv = float(hrv_avg_7d) if hrv_avg_7d and hrv_avg_7d > 0 else (float(today_hrv) if today_hrv and today_hrv > 0 else None)
+    compare_rhr = float(rhr_avg_7d) if rhr_avg_7d and rhr_avg_7d > 0 else (float(today_rhr) if today_rhr and today_rhr > 0 else None)
+
     # Compute individual components
     hrv_component: Optional[int] = None
     rhr_component: Optional[int] = None
 
-    if today_hrv and today_hrv > 0 and hrv_mean > 0:
-        hrv_component = _z_score_to_100(float(today_hrv), hrv_mean, hrv_std)
+    if compare_hrv and hrv_mean > 0:
+        hrv_component = _z_score_to_100(compare_hrv, hrv_mean, hrv_std)
     elif readiness and readiness.hrv_score is not None:
         hrv_component = readiness.hrv_score
 
-    if today_rhr and today_rhr > 0 and rhr_mean > 0:
-        rhr_component = _z_score_to_100(float(today_rhr), rhr_mean, rhr_std, invert=True)
+    if compare_rhr and rhr_mean > 0:
+        rhr_component = _z_score_to_100(compare_rhr, rhr_mean, rhr_std, invert=True)
     elif readiness and readiness.rhr_score is not None:
         rhr_component = readiness.rhr_score
 
@@ -203,6 +279,8 @@ def compute_recovery(
         score=score,
         hrv_component=hrv_component,
         rhr_component=rhr_component,
+        hrv_avg_7d=hrv_avg_7d,
+        rhr_avg_7d=rhr_avg_7d,
         trend=trend,
         fatigue_signal=fatigue,
         details="; ".join(details_parts) if details_parts else "Insufficient data, using device built-in score",
@@ -217,15 +295,18 @@ def compute_recovery(
 def compute_sleep_quality(
     sleep: Optional[SleepData],
     age: int = 30,
+    sleep_times: Optional[list[tuple[int, int]]] = None,
 ) -> Optional[SleepQualityScore]:
     """Compute sleep quality score (0-100).
 
     Dimensions and weights:
-    - Duration (0.25): Target 7-9 hours
-    - Deep sleep ratio (0.25): Target 15-20%
-    - REM ratio (0.20): Target 20-25%
-    - Sleep efficiency (0.15): Target >= 85%
-    - Interruption penalty (0.15): Based on wake count and awake duration
+    - Duration (0.20): Target 7-9 hours
+    - Deep sleep ratio (0.20): Target 15-20%
+    - REM ratio (0.15): Target 20-25%
+    - Sleep efficiency (0.12): Target >= 85%
+    - Interruption penalty (0.12): Based on wake count and awake duration
+    - Onset latency (0.11): 10-20 min normal, >30 min penalty
+    - Schedule consistency (0.10): Std dev of sleep/wake times
     """
     if not sleep or sleep.total_minutes == 0:
         return None
@@ -243,7 +324,6 @@ def compute_sleep_quality(
     if total < target_min:
         duration_score = _clamp((total / target_min) * 100)
     elif total > target_max:
-        # Oversleeping also incurs a penalty
         over = total - target_max
         duration_score = _clamp(100 - over * 0.5)
     else:
@@ -262,7 +342,6 @@ def compute_sleep_quality(
         efficiency = (total / sleep.total_bed_time) * 100
         efficiency_score = _clamp(efficiency / 85 * 100)
     else:
-        # When no time-in-bed data is available, estimate from awake duration
         awake_ratio = (sleep.wake_minutes / (total + sleep.wake_minutes)) if (total + sleep.wake_minutes) > 0 else 0
         efficiency_score = _clamp((1 - awake_ratio) * 100 / 0.85)
 
@@ -270,13 +349,55 @@ def compute_sleep_quality(
     wake_penalty = sleep.wake_count * 12 + sleep.wake_minutes * 1.5
     interruption_score = _clamp(100 - wake_penalty)
 
-    # Weighted combination
+    # 6. Sleep onset latency score (clinical: 10-20 min normal, >30 min = insomnia)
+    sol = sleep.sleep_onset_latency
+    if sol is not None and sol >= 0:
+        if sol <= 20:
+            sol_score = 100  # Optimal range
+        elif sol <= 30:
+            sol_score = _clamp(100 - (sol - 20) * 3)  # Gradual penalty
+        else:
+            sol_score = _clamp(70 - (sol - 30) * 2)  # Steeper penalty above 30 min
+    else:
+        sol_score = 75  # Unknown: assume average
+        sol = None
+
+    # 7. Sleep schedule consistency (std dev of sleep/wake times across days)
+    consistency_score: Optional[int] = None
+    if sleep_times and len(sleep_times) >= 3:
+        import math
+
+        # Extract sleep start minutes (0-1440, normalize midnight crossings)
+        sleep_starts = [s for s, _ in sleep_times]
+        wake_ends = [w for _, w in sleep_times]
+
+        def _circ_std(minutes_list: list[int]) -> float:
+            """Circular standard deviation for time-of-day in minutes."""
+            # Convert to radians on a 24h circle
+            radians = [m / 1440 * 2 * math.pi for m in minutes_list]
+            sin_sum = sum(math.sin(r) for r in radians)
+            cos_sum = sum(math.cos(r) for r in radians)
+            n = len(radians)
+            r = math.sqrt(sin_sum**2 + cos_sum**2) / n
+            # Circular standard deviation
+            return math.sqrt(-2 * math.log(r)) * 1440 / (2 * math.pi) if r > 0 else 360
+
+        sleep_std = _circ_std(sleep_starts)
+        wake_std = _circ_std(wake_ends)
+        avg_std = (sleep_std + wake_std) / 2
+
+        # Map to score: 0 std = 100, 60 min std = 50, 120+ min std = 0
+        consistency_score = int(_clamp(100 - avg_std * (100 / 120)))
+
+    # Weighted combination (updated weights)
     score = int(_clamp(
-        0.25 * duration_score +
-        0.25 * deep_score +
-        0.20 * rem_score +
-        0.15 * efficiency_score +
-        0.15 * interruption_score
+        0.20 * duration_score +
+        0.20 * deep_score +
+        0.15 * rem_score +
+        0.12 * efficiency_score +
+        0.12 * interruption_score +
+        0.11 * sol_score +
+        0.10 * (consistency_score if consistency_score is not None else 75)
     ))
 
     # Generate description
@@ -291,6 +412,15 @@ def compute_sleep_quality(
         details_parts.append(f"REM {rem_pct:.0f}%{' (on target)' if 20 <= rem_pct <= 25 else ' (below target)'}")
     if sleep.wake_count > 0:
         details_parts.append(f"Woke up {sleep.wake_count} time(s)")
+    if sol is not None:
+        if sol <= 20:
+            details_parts.append(f"Sleep onset {sol}min (normal)")
+        elif sol <= 30:
+            details_parts.append(f"Sleep onset {sol}min (slightly slow)")
+        else:
+            details_parts.append(f"Sleep onset {sol}min (slow, >30min may indicate insomnia)")
+    if consistency_score is not None:
+        details_parts.append(f"Schedule consistency {consistency_score}/100")
 
     return SleepQualityScore(
         score=score,
@@ -298,6 +428,8 @@ def compute_sleep_quality(
         rem_sleep_pct=round(rem_pct, 1),
         efficiency_pct=round(efficiency_score, 1),
         duration_minutes=total,
+        onset_latency_minutes=sol,
+        consistency_score=consistency_score,
         details="; ".join(details_parts),
     )
 
@@ -311,87 +443,76 @@ def compute_exertion(
     workouts_7d: list[Workout],
     workouts_28d: list[Workout],
     sport_load: Optional[list[SportLoadRecord]] = None,
+    resting_hr: int = 60,
+    max_hr: int = 190,
 ) -> ExertionScore:
     """Compute training load score (0-100).
 
-    Based on acute (7-day) / chronic (28-day) training load ratio.
+    Uses Heart Rate Reserve (HRR) method instead of ACWR.
+    Threshold = RHR + HRR * 0.45 (Karvonen formula).
+    Score based on weekly minutes above threshold vs recommended range.
+
+    Reference: Athlytic exertion model, Karvonen formula.
+    ACWR has been widely criticized (Impellizzeri 2019, Wang 2020).
     """
-    # Compute acute load (7 days)
-    acute_load = 0.0
-    for w in workouts_7d:
-        if w.exercise_load and w.exercise_load > 0:
-            acute_load += w.exercise_load
-        elif w.duration_seconds > 0 and w.avg_heart_rate:
-            # Estimate load: duration (minutes) * heart rate intensity
-            duration_min = w.duration_seconds / 60
-            hr_intensity = w.avg_heart_rate / 190  # Assume max HR of 190
-            acute_load += duration_min * hr_intensity * 10
+    hr_threshold = compute_hr_threshold(max_hr, resting_hr)
+    minutes_above = compute_time_above_threshold(workouts_7d, hr_threshold)
 
-    # If no workout data, try using sport_load
-    if acute_load == 0 and sport_load:
-        for sl in sport_load[-7:]:
-            if sl.wtl_sum:
-                acute_load += sl.wtl_sum
+    # Target zone: 150-300 min/week of moderate-to-vigorous activity
+    # (WHO guidelines: 150-300 min moderate or 75-150 min vigorous)
+    target_low = 150.0
+    target_high = 300.0
 
-    # Compute chronic load (28-day weekly average)
-    chronic_weekly = 0.0
-    if workouts_28d:
-        total_load = 0.0
-        for w in workouts_28d:
-            if w.exercise_load and w.exercise_load > 0:
-                total_load += w.exercise_load
-            elif w.duration_seconds > 0 and w.avg_heart_rate:
-                duration_min = w.duration_seconds / 60
-                hr_intensity = w.avg_heart_rate / 190
-                total_load += duration_min * hr_intensity * 10
-        chronic_weekly = total_load / 4  # 4-week average
-    elif sport_load and len(sport_load) >= 7:
-        total = sum(sl.wtl_sum or 0 for sl in sport_load[-28:])
-        chronic_weekly = total / 4
-
-    # Compute ratio
-    if chronic_weekly > 0:
-        ratio = acute_load / chronic_weekly
-    else:
-        ratio = 0
-
-    # Zone mapping
-    if ratio < 0.8:
+    # Zone classification based on weekly minutes above threshold
+    if minutes_above <= 0:
+        zone = "inactive"
+        score = 0
+    elif minutes_above < target_low * 0.5:
         zone = "detraining"
-        score = int(_clamp(ratio / 0.8 * 40))
-    elif ratio < 1.0:
-        zone = "maintaining"
-        score = int(_clamp(40 + (ratio - 0.8) / 0.2 * 20))
-    elif ratio < 1.3:
+        score = int(_clamp(minutes_above / (target_low * 0.5) * 30))
+    elif minutes_above < target_low:
+        zone = "low"
+        score = int(_clamp(30 + (minutes_above - target_low * 0.5) / (target_low * 0.5) * 20))
+    elif minutes_above <= target_high:
         zone = "productive"
-        score = int(_clamp(60 + (ratio - 1.0) / 0.3 * 20))
-    elif ratio < 1.5:
+        score = int(_clamp(50 + (minutes_above - target_low) / (target_high - target_low) * 30))
+    elif minutes_above <= target_high * 1.5:
         zone = "overreaching"
-        score = int(_clamp(80 + (ratio - 1.3) / 0.2 * 10))
+        score = int(_clamp(80 + (minutes_above - target_high) / (target_high * 0.5) * 15))
     else:
         zone = "high_risk"
-        score = int(_clamp(90 + min((ratio - 1.5) / 0.5 * 10, 10)))
+        score = int(_clamp(95 + min((minutes_above - target_high * 1.5) / target_high * 5, 5)))
 
-    # Generate description
+    # Adaptive target zone based on recovery (inverted: lower recovery → lower target)
+    # This is a simplified version of Athlytic's Target Exertion Zone
+    target_low_adj = int(target_low * 0.5)  # Conservative default
+    target_high_adj = int(target_high * 1.0)
+
     zone_desc = {
-        "detraining": "Undertrained, consider increasing exercise volume",
-        "maintaining": "Maintaining, moderate training volume",
-        "productive": "Effective improvement, good training response",
-        "overreaching": "Load is high, pay attention to recovery",
-        "high_risk": "Risk of overtraining, consider rest days",
         "inactive": "No workout data",
+        "detraining": "Undertrained, consider increasing exercise volume",
+        "low": "Below recommended range, room to increase",
+        "productive": "Effective training volume, in the WHO recommended range",
+        "overreaching": "Above recommended range, ensure adequate recovery",
+        "high_risk": "Significantly overtrained, schedule rest days",
     }
 
-    details = f"7-day load {acute_load:.0f}, 28-day weekly avg {chronic_weekly:.0f}, ratio {ratio:.2f}"
+    details = (
+        f"HR threshold {hr_threshold}bpm, "
+        f"{minutes_above:.0f} min/week above threshold "
+        f"(target {target_low:.0f}-{target_high:.0f} min)"
+    )
     if zone in zone_desc:
-        details += f" ({zone_desc[zone]})"
+        details += f" — {zone_desc[zone]}"
 
     return ExertionScore(
-        score=score if acute_load > 0 else 0,
-        acute_load_7d=round(acute_load, 1),
-        chronic_load_28d=round(chronic_weekly, 1),
-        ratio=round(ratio, 2),
-        zone=zone if acute_load > 0 else "inactive",
+        score=score,
+        max_hr_28d=max_hr,
+        hr_threshold=hr_threshold,
+        minutes_above_threshold=round(minutes_above, 1),
+        target_zone_low=target_low_adj,
+        target_zone_high=target_high_adj,
+        zone=zone,
         details=details,
     )
 
@@ -482,6 +603,10 @@ def generate_recommendations(
             recommendations.append("REM sleep is insufficient, which may affect memory and emotional regulation. Maintain a regular sleep schedule.")
         if sleep_quality.duration_minutes and sleep_quality.duration_minutes < 360:
             recommendations.append("Sleep duration is under 6 hours. Chronic sleep deprivation affects health and athletic performance.")
+        if sleep_quality.onset_latency_minutes is not None and sleep_quality.onset_latency_minutes > 30:
+            recommendations.append("Sleep onset latency >30 minutes may indicate insomnia. Consider CBT-I techniques, limit screen time, and maintain a consistent bedtime.")
+        if sleep_quality.consistency_score is not None and sleep_quality.consistency_score < 50:
+            recommendations.append("Sleep schedule is irregular. Try to go to bed and wake up at consistent times, even on weekends.")
 
     # Training load recommendations
     if exertion and exertion.zone != "inactive":
@@ -491,6 +616,8 @@ def generate_recommendations(
             recommendations.append("Training load is on the high side. Consider reducing training volume and increasing recovery time.")
         elif exertion.zone == "detraining":
             recommendations.append("Recent training volume is low. If your goal is to improve fitness, gradually increase exercise volume.")
+        elif exertion.zone == "low":
+            recommendations.append("Training volume is below WHO recommended range (150-300 min/week). Consider adding more activity.")
         elif exertion.zone == "productive":
             recommendations.append("Training load is in the effective improvement zone. Maintain your current pace.")
 
