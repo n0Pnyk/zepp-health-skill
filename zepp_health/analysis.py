@@ -78,6 +78,7 @@ def _fetch_all_data(
     # Execute all calls in parallel
     results: dict[str, Any] = {}
     errors: set[str] = set()
+    meta: dict[str, dict] = {}
 
     with ThreadPoolExecutor(max_workers=8) as executor:
         future_to_key = {}
@@ -88,12 +89,22 @@ def _fetch_all_data(
         for future in as_completed(future_to_key):
             key = future_to_key[future]
             try:
-                results[key] = future.result()
-            except Exception:
+                result = future.result()
+                results[key] = result
+                # Track status per API
+                if isinstance(result, list):
+                    meta[key] = {"status": "ok" if result else "empty", "items": len(result)}
+                elif result is None:
+                    meta[key] = {"status": "empty"}
+                else:
+                    meta[key] = {"status": "ok"}
+            except Exception as e:
                 errors.add(key)
                 results[key] = None
+                meta[key] = {"status": "error", "error": str(e)[:200]}
 
     results["_errors"] = errors
+    results["_meta"] = meta
     return results
 
 
@@ -495,5 +506,10 @@ def generate_snapshot(
     errors = data.get("_errors", set())
     if errors:
         snapshot["_warnings"] = [f"Failed to fetch: {e}" for e in sorted(errors)]
+
+    # Add per-API status metadata
+    api_meta = data.get("_meta", {})
+    if api_meta:
+        snapshot["_meta"] = api_meta
 
     return snapshot

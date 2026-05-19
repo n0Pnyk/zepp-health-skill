@@ -104,6 +104,11 @@ def _config_search_paths(config_path: str | None = None) -> list[Path]:
     if _package_dir.is_dir():
         paths.append(_package_dir / "config.json")
 
+    # CLI project fallback (shared config)
+    _cli_config = Path.home() / "projects" / "zepp-health" / "config.json"
+    if _cli_config.is_file():
+        paths.append(_cli_config)
+
     # Current directory
     paths.append(Path.cwd() / "config.json")
 
