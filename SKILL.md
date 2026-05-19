@@ -36,19 +36,27 @@ python3 {skill_dir}/scripts/health_snapshot.py --check
 ## 配置
 
 需要配置 Zepp API 认证信息，按优先级：
-1. `{skill_dir}/config.json` — `{ "app_token": "...", "user_id": "...", "host": "api-mifit-cn3.zepp.com" }`
-2. 环境变量 `ZEPP_COOKIE` — cookie 字符串
+1. `{skill_dir}/config.json` — 本地 skill 配置
+2. 环境变量 `ZEPP_COOKIE` — cookie 字符串（自动解析 apptoken/userid）
 3. 环境变量 `ZEPP_APP_TOKEN` + `ZEPP_USER_ID`
+4. CLI 项目 fallback — `/root/projects/zepp-health/config.json`（自动查找）
+
+> 优先用 skill 目录的 config.json，没有时自动读 CLI 项目的配置。
 
 ### 获取认证信息
 
-1. 打开 Zepp 隐私数据页面并登录：
-   ```
-   https://user.huami.com/privacy2/index.html?loginPlatform=web&platform_app=com.xiaomi.hm.health
-   ```
-2. 打开浏览器开发者工具（F12）→ Network 标签
-3. 刷新页面，找到发往 `api-mifit*.zepp.com` 的请求
-4. 从请求头复制 `apptoken`，从 URL/参数复制 `userid`
+方式 A（推荐）：直接粘贴 Cookie
+
+1. 登录 https://user.huami.com/privacy2/index.html
+2. F12 → Application → Cookies，复制整个 Cookie 字符串
+3. 粘贴给 Hermes，会自动解析 apptoken 和 userid 并更新 config.json
+
+方式 B：手动提取
+
+1. 登录隐私数据页面
+2. F12 → Network，刷新页面
+3. 找到发往 `api-mifit*.zepp.com` 的请求
+4. 从请求头复制 `apptoken`，从参数复制 `userid`
 
 > Token 约 30 天过期，手机 App 登录后服务器 token 会失效，需重新获取。
 
@@ -108,6 +116,17 @@ python3 {skill_dir}/scripts/health_snapshot.py --check
 3. **指标缺失** — snapshot JSON 的 `_meta` 字段记录每个 API 的请求状态（ok/empty/error），可据此判断是数据未同步还是 API 故障。
 
 4. **建议来源区别** — 此 skill 用 LLM 分析（个性化），CLI 的 `zepp-health briefing` 用固定规则（通用）。
+
+## ⚠️ 安装后首次配置
+
+skill 安装后需要从 CLI 项目复制 config.json（git 不含敏感配置）：
+
+```bash
+cp /root/projects/zepp-health/config.json ~/.hermes/skills/smart-home/zepp-health/config.json
+chmod 600 ~/.hermes/skills/smart-home/zepp-health/config.json
+```
+
+如果运行报 `invalid token` 或 `401`，先检查 config.json 是否存在且包含有效的 app_token。
 
 ## 更新方法
 

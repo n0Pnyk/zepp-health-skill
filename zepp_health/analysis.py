@@ -70,6 +70,10 @@ def _fetch_all_data(
         bb_end_ts = int(bb_end.timestamp() * 1000)
         _call("body_battery_7d", client.get_body_battery, bb_start_ts, bb_end_ts)
 
+        # 7-day daily data (for sleep_score trend)
+        daily_trend_start = target_date - timedelta(days=6)
+        _call("daily_7d", client.get_daily_data, daily_trend_start, target_date)
+
         # Respiratory rate for today
         resp_start = int(datetime.combine(target_date, datetime.min.time()).timestamp() * 1000)
         resp_end = int(datetime.combine(target_date, datetime.max.time()).timestamp() * 1000)
@@ -370,10 +374,21 @@ def generate_snapshot(
             hrv_trend.append(None)
             rhr_trend.append(None)
             readiness_trend.append(None)
-        sleep_score_trend.append(None)  # Not available from readiness data
+        sleep_score_trend.append(None)
 
-    # Override today's sleep score if available
-    if today_activity and today_activity.sleep:
+    # Populate sleep_score_trend from daily data (band_data summary contains sleep_score)
+    daily_7d = data.get("daily_7d") or []
+    daily_map = {}
+    for d in daily_7d:
+        if d.date:
+            daily_map[d.date] = d
+    for i, ds in enumerate(date_strs):
+        d = daily_map.get(ds)
+        if d and d.sleep and d.sleep.sleep_score is not None:
+            sleep_score_trend[i] = d.sleep.sleep_score
+
+    # Fallback: override today's sleep score from daily_today if available
+    if today_activity and today_activity.sleep and sleep_score_trend[-1] is None:
         sleep_score_trend[-1] = today_activity.sleep.sleep_score
 
     # --- Body battery: batch result grouped by date ---
