@@ -10,37 +10,65 @@ Claude Code Skill for LLM-driven analysis of Zepp/Amazfit health data with perso
 
 Works with [OpenClaw](https://github.com/anthropics/openclaw) or hermes-agent.
 
-### Quick Start
+### Install
 
 ```bash
-git clone https://github.com/n0Pnyk/zepp-health-skill.git
-cd zepp-health-skill
+# Clone to hermes-agent skill directory
+git clone https://github.com/n0Pnyk/zepp-health-skill.git ~/.hermes/skills/smart-home/zepp-health
 
 # Install dependencies
 pip install httpx pydantic rich python-dotenv
 
-# Configure authentication (choose one)
+# Configure authentication
+cd ~/.hermes/skills/smart-home/zepp-health
 cp config.example.json config.json
-# Edit config.json with your app_token and user_id
+```
 
-# Or use environment variables
+Edit `config.json` with your Zepp API credentials:
+
+```json
+{
+  "app_token": "your_app_token_here",
+  "user_id": "your_user_id_here",
+  "host": "api-mifit-cn3.zepp.com"
+}
+```
+
+Get your credentials: log in to [app.zepp.com](https://app.zepp.com), open browser developer tools (F12 → Network), find any API request, and copy `apptoken` and `userid` from the request headers or query parameters.
+
+Alternatively, use environment variables:
+
+```bash
 export ZEPP_COOKIE="userid=xxx; apptoken=xxx; region=1"
 ```
 
-Get your cookie: log in to [app.zepp.com](https://app.zepp.com), copy the Cookie from browser developer tools (F12 → Network).
+### Update
+
+```bash
+cd ~/.hermes/skills/smart-home/zepp-health
+git pull
+```
+
+Your `config.json` is in `.gitignore` and will NOT be overwritten. If `SKILL.md` has local modifications, git will prompt you to resolve the conflict.
 
 ### Usage
 
-Say any of these in OpenClaw or hermes-agent:
+In OpenClaw or hermes-agent, say:
 
 - "Analyze my health data"
 - "How did I sleep last night?"
 - "What's my recovery status?"
 - "Check my training load"
 
-The LLM will automatically call `scripts/health_snapshot.py` to fetch data and reference `references/health_analysis_guide.md` for analysis.
+### Manual Testing
 
-### Contents
+```bash
+cd ~/.hermes/skills/smart-home/zepp-health
+python3 scripts/health_snapshot.py                  # Today's data
+python3 scripts/health_snapshot.py --date 2026-05-18 # Specific date
+```
+
+### Project Structure
 
 | File | Purpose |
 |------|---------|
@@ -48,13 +76,8 @@ The LLM will automatically call `scripts/health_snapshot.py` to fetch data and r
 | `scripts/health_snapshot.py` | Data fetch script, outputs JSON |
 | `references/health_analysis_guide.md` | LLM analysis reference guide |
 | `zepp_health/` | Core library (data fetching, normalization, scoring) |
-
-### Manual Testing
-
-```bash
-python3 scripts/health_snapshot.py                  # Today's data
-python3 scripts/health_snapshot.py --date 2026-05-18 # Specific date
-```
+| `config.json` | Your local config (not tracked by git) |
+| `sync_from_cli.sh` | Sync core library from CLI repo (maintainers only) |
 
 ### CLI vs Skill
 
@@ -62,14 +85,6 @@ python3 scripts/health_snapshot.py --date 2026-05-18 # Specific date
 |------|----------------|-----------------|--------------|
 | [zepp-health CLI](https://github.com/n0Pnyk/zepp-health) | Rule engine | Generic | Python |
 | zepp-health-skill | LLM analysis | Highly personalized | LLM service |
-
-### Syncing Core Library
-
-When the CLI repo updates the core library:
-
-```bash
-./sync_from_cli.sh
-```
 
 ### Safety Boundaries
 
@@ -94,24 +109,46 @@ Claude Code Skill，让 LLM 分析你的 Zepp/Amazfit 健康数据并给出个�
 
 配合 [OpenClaw](https://github.com/anthropics/openclaw) 或 hermes-agent 使用。
 
-### 快速部署
+### 安装
 
 ```bash
-git clone https://github.com/n0Pnyk/zepp-health-skill.git
-cd zepp-health-skill
+# 克隆到 hermes-agent skill 目录
+git clone https://github.com/n0Pnyk/zepp-health-skill.git ~/.hermes/skills/smart-home/zepp-health
 
 # 安装依赖
 pip install httpx pydantic rich python-dotenv
 
-# 配置认证（选一种）
+# 配置认证
+cd ~/.hermes/skills/smart-home/zepp-health
 cp config.example.json config.json
-# 编辑 config.json，填入 app_token 和 user_id
+```
 
-# 或用环境变量
+编辑 `config.json`，填入你的 Zepp API 认证信息：
+
+```json
+{
+  "app_token": "your_app_token_here",
+  "user_id": "your_user_id_here",
+  "host": "api-mifit-cn3.zepp.com"
+}
+```
+
+获取认证信息：登录 [app.zepp.com](https://app.zepp.com)，打开浏览器开发者工具（F12 → Network），找到任意 API 请求，从请求头或参数中复制 `apptoken` 和 `userid`。
+
+也可以用环境变量：
+
+```bash
 export ZEPP_COOKIE="userid=xxx; apptoken=xxx; region=1"
 ```
 
-获取 cookie：登录 [app.zepp.com](https://app.zepp.com)，从浏览器开发者工具（F12 → Network）复制 Cookie。
+### 更新
+
+```bash
+cd ~/.hermes/skills/smart-home/zepp-health
+git pull
+```
+
+`config.json` 在 `.gitignore` 中，**不会被覆盖**。如果 `SKILL.md` 有本地修改，git 会提示你解决冲突。
 
 ### 使用
 
@@ -122,9 +159,15 @@ export ZEPP_COOKIE="userid=xxx; apptoken=xxx; region=1"
 - 「我的恢复状态如何」
 - 「帮我看看训练负荷」
 
-LLM 会自动调用 `scripts/health_snapshot.py` 获取数据，参考 `references/health_analysis_guide.md` 进行分析。
+### 手动测试
 
-### 包含内容
+```bash
+cd ~/.hermes/skills/smart-home/zepp-health
+python3 scripts/health_snapshot.py                  # 今日数据
+python3 scripts/health_snapshot.py --date 2026-05-18  # 指定日期
+```
+
+### 项目结构
 
 | 文件 | 用途 |
 |------|------|
@@ -132,13 +175,8 @@ LLM 会自动调用 `scripts/health_snapshot.py` 获取数据，参考 `referenc
 | `scripts/health_snapshot.py` | 数据获取脚本，输出 JSON |
 | `references/health_analysis_guide.md` | LLM 分析参考指南 |
 | `zepp_health/` | 核心库（数据拉取、归一化、评分） |
-
-### 手动测试
-
-```bash
-python3 scripts/health_snapshot.py                  # 今日数据
-python3 scripts/health_snapshot.py --date 2026-05-18  # 指定日期
-```
+| `config.json` | 本地配置（不纳入 git 管理） |
+| `sync_from_cli.sh` | 从 CLI 仓库同步核心库（维护者用） |
 
 ### 与 CLI 的区别
 
@@ -146,14 +184,6 @@ python3 scripts/health_snapshot.py --date 2026-05-18  # 指定日期
 |------|----------|------------|------|
 | [zepp-health CLI](https://github.com/n0Pnyk/zepp-health) | 规则引擎 | 通用 | Python |
 | zepp-health-skill | LLM 分析 | 高度个性化 | LLM 服务 |
-
-### 同步核心库
-
-当 CLI 仓库更新核心库后，运行同步脚本：
-
-```bash
-./sync_from_cli.sh
-```
 
 ### 安全边界
 
