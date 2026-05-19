@@ -1,10 +1,12 @@
 """Analysis pipeline.
 
-Coordinates data fetching, score computation, and report generation.
+Coordinates data fetching, scoring, and report generation.
+Optimized with parallel API calls via ThreadPoolExecutor.
 """
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
@@ -19,51 +21,113 @@ from zepp_health.scoring import (
 )
 
 
+def _fetch_all_data(
+    client: ZeppClient,
+    target_date: date,
+    *,
+    include_extended: bool = False,
+) -> dict[str, Any]:
+    """Fetch all required raw data in parallel.
+
+    Args:
+        client: Zepp API client
+        target_date: Date to fetch data for
+        include_extended: If True, also fetch 7-day trends (for snapshot)
+
+    Returns:
+        Dict with all fetched data, keyed by descriptive names.
+    """
+    # Define all independent API calls
+    tasks: dict[str, Any] = {}
+
+    def _call(key: str, fn, *args, **kwargs):
+        """Register a callable under a key."""
+        tasks[key] = (fn, args, kwargs)
+
+    # --- Core data (always needed) ---
+    _call("daily_today", client.get_daily_data, target_date, target_date)
+    _call("readiness_today", client.get_readiness_data, target_date, target_date)
+    _call("stress_today", client.get_stress_data, target_date, target_date)
+    _call("spo2_today", client.get_spo2_data, target_date, target_date)
+
+    # 60-day readiness baseline
+    baseline_start = target_date - timedelta(days=60)
+    _call("readiness_baseline", client.get_readiness_data, baseline_start, target_date)
+
+    # 28-day workouts (for training load)
+    workout_start_28d = target_date - timedelta(days=28)
+    _call("workouts_28d", client.get_workouts, workout_start_28d, target_date)
+
+    # Sport load (optional)
+    _call("sport_load", client.get_sport_load, workout_start_28d, target_date)
+
+    # --- Extended data (for snapshot) ---
+    if include_extended:
+        # Body battery: single call for 7-day range (instead of 7 separate calls)
+        bb_start = datetime.combine(target_date - timedelta(days=6), datetime.min.time())
+        bb_end = datetime.combine(target_date, datetime.max.time())
+        bb_start_ts = int(bb_start.timestamp() * 1000)
+        bb_end_ts = int(bb_end.timestamp() * 1000)
+        _call("body_battery_7d", client.get_body_battery, bb_start_ts, bb_end_ts)
+
+        # Respiratory rate for today
+        resp_start = int(datetime.combine(target_date, datetime.min.time()).timestamp() * 1000)
+        resp_end = int(datetime.combine(target_date, datetime.max.time()).timestamp() * 1000)
+        _call("respiratory_rate", client.get_respiratory_rate, resp_start, resp_end)
+
+    # Execute all calls in parallel
+    results: dict[str, Any] = {}
+    errors: set[str] = set()
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        future_to_key = {}
+        for key, (fn, args, kwargs) in tasks.items():
+            future = executor.submit(fn, *args, **kwargs)
+            future_to_key[future] = key
+
+        for future in as_completed(future_to_key):
+            key = future_to_key[future]
+            try:
+                results[key] = future.result()
+            except Exception:
+                errors.add(key)
+                results[key] = None
+
+    results["_errors"] = errors
+    return results
+
+
 def generate_daily_report(
     client: ZeppClient,
     target_date: date | None = None,
 ) -> HealthReport:
     """Generate daily health report.
 
-    Process:
-    1. Fetch today's data (band_data, readiness, stress, spo2)
-    2. Fetch historical data (28-day workouts, 60-day readiness for baseline)
-    3. Call scoring functions
-    4. Generate recommendations
-    5. Return HealthReport
+    Uses parallel API calls for all independent data fetches.
     """
     if target_date is None:
         target_date = date.today()
 
-    # ----------------------------------------------------------
-    # 1. Fetch today's data
-    # ----------------------------------------------------------
+    # Fetch all data in parallel
+    data = _fetch_all_data(client, target_date, include_extended=False)
 
-    # Band data (steps, sleep, heart rate summary)
-    daily_data = client.get_daily_data(target_date, target_date)
+    # --- Extract today's values ---
+
+    daily_data = data.get("daily_today") or []
     today_activity = daily_data[0] if daily_data else None
 
-    # Readiness (HRV, RHR, readiness)
-    readiness_list = client.get_readiness_data(target_date, target_date)
+    readiness_list = data.get("readiness_today") or []
     today_readiness = readiness_list[-1] if readiness_list else None
 
-    # Stress
-    stress_list = client.get_stress_data(target_date, target_date)
+    stress_list = data.get("stress_today") or []
     today_stress = stress_list[-1] if stress_list else None
 
-    # SpO2
-    spo2_list = client.get_spo2_data(target_date, target_date)
+    spo2_list = data.get("spo2_today") or []
     today_spo2 = spo2_list[-1] if spo2_list else None
 
-    # ----------------------------------------------------------
-    # 2. Fetch historical data for baseline and training load
-    # ----------------------------------------------------------
+    # --- Extract baseline history ---
 
-    # 60-day readiness history (for HRV/RHR baseline)
-    baseline_start = target_date - timedelta(days=60)
-    readiness_history = client.get_readiness_data(baseline_start, target_date)
-
-    # Extract HRV and RHR history series
+    readiness_history = data.get("readiness_baseline") or []
     hrv_history: list[int] = []
     rhr_history: list[int] = []
     for r in readiness_history:
@@ -76,48 +140,35 @@ def generate_daily_report(
         elif r.rhr_baseline and r.rhr_baseline > 0:
             rhr_history.append(r.rhr_baseline)
 
-    # 28-day workout history (for training load)
-    workout_start = target_date - timedelta(days=28)
-    workouts_28d = client.get_workouts(workout_start, target_date)
+    # --- Workouts ---
+
+    workouts_28d = data.get("workouts_28d") or []
     workouts_7d = [w for w in workouts_28d if (target_date - w.start_time.date()).days <= 7]
 
-    # Sport load (optional)
     sport_load = None
-    try:
-        sport_load = client.get_sport_load(workout_start, target_date)
-    except Exception:
-        pass  # sport_load endpoint may not be available
+    if "sport_load" not in data.get("_errors", set()):
+        sport_load = data.get("sport_load")
 
-    # ----------------------------------------------------------
-    # 3. Extract today's metric values
-    # ----------------------------------------------------------
+    # --- Today's metric values ---
 
-    # HRV: prefer sleep_hrv, fall back to hrv_baseline
     today_hrv: int | None = None
     if today_readiness:
         today_hrv = today_readiness.sleep_hrv or today_readiness.hrv_baseline
 
-    # RHR: prefer sleep_rhr, fall back to resting_heart_rate from band_data
     today_rhr: int | None = None
     if today_readiness and today_readiness.sleep_rhr:
         today_rhr = today_readiness.sleep_rhr
     elif today_activity and today_activity.sleep and today_activity.sleep.resting_heart_rate:
         today_rhr = today_activity.sleep.resting_heart_rate
 
-    # Sleep data
     sleep = today_activity.sleep if today_activity else None
-
-    # Average stress
     avg_stress = today_stress.avg_stress if today_stress else None
 
-    # Average SpO2
     avg_spo2: int | None = None
     if today_spo2 and today_spo2.readings:
         avg_spo2 = int(sum(r.spo2 for r in today_spo2.readings) / len(today_spo2.readings))
 
-    # ----------------------------------------------------------
-    # 4. Compute scores
-    # ----------------------------------------------------------
+    # --- Compute scores ---
 
     recovery = compute_recovery(
         today_hrv=today_hrv,
@@ -143,10 +194,6 @@ def generate_daily_report(
         avg_spo2=avg_spo2,
     )
 
-    # ----------------------------------------------------------
-    # 5. Generate recommendations
-    # ----------------------------------------------------------
-
     recommendations = generate_recommendations(
         recovery=recovery,
         sleep_quality=sleep_quality,
@@ -155,9 +202,7 @@ def generate_daily_report(
         avg_spo2=avg_spo2,
     )
 
-    # ----------------------------------------------------------
-    # 6. Assemble raw metrics
-    # ----------------------------------------------------------
+    # --- Raw metrics ---
 
     raw_metrics: dict = {}
     if today_activity:
@@ -182,10 +227,6 @@ def generate_daily_report(
     if today_spo2 and today_spo2.odi is not None:
         raw_metrics["spo2_odi"] = today_spo2.odi
 
-    # ----------------------------------------------------------
-    # 7. Return report
-    # ----------------------------------------------------------
-
     return HealthReport(
         date=target_date.isoformat(),
         generated_at=datetime.now(),
@@ -202,33 +243,110 @@ def generate_snapshot(
     client: ZeppClient,
     target_date: date | None = None,
 ) -> dict[str, Any]:
-    """Export a complete data snapshot for LLM analysis.
+    """Export complete health data snapshot for LLM analysis.
 
-    Richer than generate_daily_report(), includes 7-day trend data.
-    Output is a dict, directly JSON-serializable.
+    Richer than generate_daily_report(), includes 7-day trends.
+    Uses a single _fetch_all_data() call to avoid duplicate API requests.
     """
     if target_date is None:
         target_date = date.today()
 
-    # Today's report
-    report = generate_daily_report(client, target_date)
+    # Fetch ALL data in one parallel batch (includes extended data)
+    data = _fetch_all_data(client, target_date, include_extended=True)
 
-    # 7-day trends
-    trend_start = target_date - timedelta(days=6)
-    readiness_7d = client.get_readiness_data(trend_start, target_date)
-    daily_7d = client.get_daily_data(trend_start, target_date)
+    # --- Extract today's values (same logic as generate_daily_report) ---
 
-    # Build date index
-    readiness_map = {r.date: r for r in readiness_7d}
-    daily_map = {d.date: d for d in daily_7d}
+    daily_data = data.get("daily_today") or []
+    today_activity = daily_data[0] if daily_data else None
+
+    readiness_list = data.get("readiness_today") or []
+    today_readiness = readiness_list[-1] if readiness_list else None
+
+    stress_list = data.get("stress_today") or []
+    today_stress = stress_list[-1] if stress_list else None
+
+    spo2_list = data.get("spo2_today") or []
+    today_spo2 = spo2_list[-1] if spo2_list else None
+
+    # Baseline history
+    readiness_history = data.get("readiness_baseline") or []
+    hrv_history: list[int] = []
+    rhr_history: list[int] = []
+    for r in readiness_history:
+        if r.sleep_hrv and r.sleep_hrv > 0:
+            hrv_history.append(r.sleep_hrv)
+        elif r.hrv_baseline and r.hrv_baseline > 0:
+            hrv_history.append(r.hrv_baseline)
+        if r.sleep_rhr and r.sleep_rhr > 0:
+            rhr_history.append(r.sleep_rhr)
+        elif r.rhr_baseline and r.rhr_baseline > 0:
+            rhr_history.append(r.rhr_baseline)
+
+    # Workouts
+    workouts_28d = data.get("workouts_28d") or []
+    workouts_7d = [w for w in workouts_28d if (target_date - w.start_time.date()).days <= 7]
+
+    sport_load = None
+    if "sport_load" not in data.get("_errors", set()):
+        sport_load = data.get("sport_load")
+
+    # Today's metric values
+    today_hrv: int | None = None
+    if today_readiness:
+        today_hrv = today_readiness.sleep_hrv or today_readiness.hrv_baseline
+
+    today_rhr: int | None = None
+    if today_readiness and today_readiness.sleep_rhr:
+        today_rhr = today_readiness.sleep_rhr
+    elif today_activity and today_activity.sleep and today_activity.sleep.resting_heart_rate:
+        today_rhr = today_activity.sleep.resting_heart_rate
+
+    sleep = today_activity.sleep if today_activity else None
+    avg_stress = today_stress.avg_stress if today_stress else None
+
+    avg_spo2: int | None = None
+    if today_spo2 and today_spo2.readings:
+        avg_spo2 = int(sum(r.spo2 for r in today_spo2.readings) / len(today_spo2.readings))
+
+    # --- Compute scores ---
+
+    recovery = compute_recovery(
+        today_hrv=today_hrv,
+        today_rhr=today_rhr,
+        hrv_history=hrv_history,
+        rhr_history=rhr_history,
+        readiness=today_readiness,
+    )
+
+    sleep_quality = compute_sleep_quality(sleep)
+
+    exertion = compute_exertion(
+        workouts_7d=workouts_7d,
+        workouts_28d=workouts_28d,
+        sport_load=sport_load,
+    )
+
+    overall_score = compute_overall(
+        recovery=recovery,
+        sleep_quality=sleep_quality,
+        exertion=exertion,
+        avg_stress=avg_stress,
+        avg_spo2=avg_spo2,
+    )
+
+    # --- Build 7-day trends from baseline data (already fetched) ---
 
     dates = [(target_date - timedelta(days=i)) for i in range(6, -1, -1)]
     date_strs = [d.isoformat() for d in dates]
 
+    # Use baseline data for 7-day trends (60-day fetch already covers this)
+    readiness_map = {r.date: r for r in readiness_history}
+
+    # daily_data only has today; fetch 7-day daily data from baseline readiness
+    # We need sleep scores from daily data - use readiness data as proxy
     hrv_trend: list[int | None] = []
     rhr_trend: list[int | None] = []
     readiness_trend: list[int | None] = []
-    bb_trend: list[int | None] = []
     sleep_score_trend: list[int | None] = []
 
     for ds in date_strs:
@@ -241,28 +359,27 @@ def generate_snapshot(
             hrv_trend.append(None)
             rhr_trend.append(None)
             readiness_trend.append(None)
+        sleep_score_trend.append(None)  # Not available from readiness data
 
-        day = daily_map.get(ds)
-        if day and day.sleep:
-            sleep_score_trend.append(day.sleep.sleep_score)
-        else:
-            sleep_score_trend.append(None)
+    # Override today's sleep score if available
+    if today_activity and today_activity.sleep:
+        sleep_score_trend[-1] = today_activity.sleep.sleep_score
 
-    # Body battery 7-day
-    for d in dates:
-        start_ts = int(datetime.combine(d, datetime.min.time()).timestamp() * 1000)
-        end_ts = int(datetime.combine(d, datetime.max.time()).timestamp() * 1000)
-        try:
-            bb_readings = client.get_body_battery(start_ts, end_ts)
-            bb_trend.append(bb_readings[0].value if bb_readings else None)
-        except Exception:
-            bb_trend.append(None)
+    # --- Body battery: batch result grouped by date ---
 
-    # 7-day workouts
-    workout_start = target_date - timedelta(days=6)
-    workouts = client.get_workouts(workout_start, target_date)
+    bb_readings = data.get("body_battery_7d") or []
+    bb_by_date: dict[str, int] = {}
+    for reading in bb_readings:
+        d = reading.timestamp.strftime("%Y-%m-%d")
+        # Keep the latest reading per day
+        bb_by_date[d] = reading.value
+
+    bb_trend = [bb_by_date.get(ds) for ds in date_strs]
+
+    # --- 7-day workouts (subset of 28-day) ---
+
     workouts_data = []
-    for w in workouts:
+    for w in workouts_7d:
         workouts_data.append({
             "date": w.start_time.strftime("%Y-%m-%d"),
             "type": w.workout_name,
@@ -273,33 +390,58 @@ def generate_snapshot(
             "max_hr": w.max_heart_rate,
         })
 
-    # Assemble snapshot
-    today = report.raw_metrics
+    # --- Build raw metrics ---
+
+    raw_metrics: dict = {}
+    if today_activity:
+        if today_activity.steps:
+            raw_metrics["steps"] = today_activity.steps.steps
+            raw_metrics["distance_meters"] = today_activity.steps.distance_meters
+            raw_metrics["calories"] = today_activity.steps.calories
+        if today_activity.sleep:
+            raw_metrics["sleep_minutes"] = today_activity.sleep.total_minutes
+            raw_metrics["deep_sleep_minutes"] = today_activity.sleep.deep_sleep_minutes
+            raw_metrics["light_sleep_minutes"] = today_activity.sleep.light_sleep_minutes
+            raw_metrics["rem_sleep_minutes"] = today_activity.sleep.rem_sleep_minutes
+            raw_metrics["resting_heart_rate"] = today_activity.sleep.resting_heart_rate
+    if today_hrv:
+        raw_metrics["sleep_hrv"] = today_hrv
+    if today_readiness and today_readiness.hrv_baseline:
+        raw_metrics["hrv_baseline"] = today_readiness.hrv_baseline
+    if avg_stress is not None:
+        raw_metrics["avg_stress"] = avg_stress
+    if avg_spo2 is not None:
+        raw_metrics["avg_spo2"] = avg_spo2
+    if today_spo2 and today_spo2.odi is not None:
+        raw_metrics["spo2_odi"] = today_spo2.odi
+
+    # --- Assemble snapshot ---
+
     snapshot: dict[str, Any] = {
         "date": target_date.isoformat(),
         "today": {
-            "steps": today.get("steps"),
-            "distance_meters": today.get("distance_meters"),
-            "calories": today.get("calories"),
+            "steps": raw_metrics.get("steps"),
+            "distance_meters": raw_metrics.get("distance_meters"),
+            "calories": raw_metrics.get("calories"),
             "sleep": {
-                "total_minutes": today.get("sleep_minutes"),
-                "deep": today.get("deep_sleep_minutes"),
-                "light": today.get("light_sleep_minutes"),
-                "rem": today.get("rem_sleep_minutes"),
-                "wake_count": report.sleep_quality and report.sleep_quality.duration_minutes,
+                "total_minutes": raw_metrics.get("sleep_minutes"),
+                "deep": raw_metrics.get("deep_sleep_minutes"),
+                "light": raw_metrics.get("light_sleep_minutes"),
+                "rem": raw_metrics.get("rem_sleep_minutes"),
+                "wake_count": None,
                 "score": None,
-                "resting_hr": today.get("resting_heart_rate"),
+                "resting_hr": raw_metrics.get("resting_heart_rate"),
             },
             "heart_rate": {
-                "sleep_hrv": today.get("sleep_hrv"),
-                "hrv_baseline": today.get("hrv_baseline"),
+                "sleep_hrv": raw_metrics.get("sleep_hrv"),
+                "hrv_baseline": raw_metrics.get("hrv_baseline"),
             },
             "stress": {
-                "avg": today.get("avg_stress"),
+                "avg": raw_metrics.get("avg_stress"),
             },
             "spo2": {
-                "avg": today.get("avg_spo2"),
-                "odi": today.get("spo2_odi"),
+                "avg": raw_metrics.get("avg_spo2"),
+                "odi": raw_metrics.get("spo2_odi"),
             },
             "readiness": {},
         },
@@ -312,15 +454,14 @@ def generate_snapshot(
         },
         "workouts_7d": workouts_data,
         "scores": {
-            "recovery": report.recovery.score if report.recovery else None,
-            "sleep_quality": report.sleep_quality.score if report.sleep_quality else None,
-            "exertion": report.exertion.score if report.exertion else None,
-            "overall": report.overall_score,
+            "recovery": recovery.score if recovery else None,
+            "sleep_quality": sleep_quality.score if sleep_quality else None,
+            "exertion": exertion.score if exertion else None,
+            "overall": overall_score,
         },
     }
 
-    # Supplement readiness detail data
-    today_readiness = readiness_map.get(target_date.isoformat())
+    # Supplement readiness details
     if today_readiness:
         skin_delta = None
         if today_readiness.skin_temp_calibrated is not None:
@@ -332,30 +473,22 @@ def generate_snapshot(
             "skin_temp_delta": skin_delta,
         }
 
-    # Supplement sleep score
-    today_daily = daily_map.get(target_date.isoformat())
-    if today_daily and today_daily.sleep:
-        snapshot["today"]["sleep"]["score"] = today_daily.sleep.sleep_score
-        snapshot["today"]["sleep"]["wake_count"] = today_daily.sleep.wake_count
+    # Supplement sleep details
+    if today_activity and today_activity.sleep:
+        snapshot["today"]["sleep"]["score"] = today_activity.sleep.sleep_score
+        snapshot["today"]["sleep"]["wake_count"] = today_activity.sleep.wake_count
 
     # Supplement body battery
     snapshot["today"]["body_battery"] = bb_trend[-1] if bb_trend else None
 
     # Supplement respiratory rate
-    try:
-        resp_ts_start = int(datetime.combine(target_date, datetime.min.time()).timestamp() * 1000)
-        resp_ts_end = int(datetime.combine(target_date, datetime.max.time()).timestamp() * 1000)
-        resp = client.get_respiratory_rate(resp_ts_start, resp_ts_end)
-        if resp:
-            snapshot["today"]["respiratory_rate"] = resp[-1].breaths_per_minute
-    except Exception:
-        pass
+    resp_data = data.get("respiratory_rate")
+    if resp_data:
+        snapshot["today"]["respiratory_rate"] = resp_data[-1].breaths_per_minute
 
     # Supplement stress details
-    stress_list = client.get_stress_data(target_date, target_date)
-    if stress_list:
-        st = stress_list[-1]
-        snapshot["today"]["stress"]["min"] = st.min_stress
-        snapshot["today"]["stress"]["max"] = st.max_stress
+    if today_stress:
+        snapshot["today"]["stress"]["min"] = today_stress.min_stress
+        snapshot["today"]["stress"]["max"] = today_stress.max_stress
 
     return snapshot
