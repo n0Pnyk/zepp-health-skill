@@ -1,12 +1,12 @@
-"""配置加载和认证管理。
+"""Configuration loading and authentication management.
 
-支持多种配置来源，优先级从高到低：
-1. CLI 参数（--token, --user-id, --cookie）
-2. --config 指定的文件 或 $ZEPP_CONFIG 环境变量
+Supports multiple configuration sources, priority from high to low:
+1. CLI arguments (--token, --user-id, --cookie)
+2. File specified via --config or $ZEPP_CONFIG environment variable
 3. ./config.json
 4. ~/.config/zepp-health/config.json
-5. 环境变量 ZEPP_APP_TOKEN, ZEPP_USER_ID 等
-6. ZEPP_COOKIE 环境变量（自动解析）
+5. Environment variables ZEPP_APP_TOKEN, ZEPP_USER_ID, etc.
+6. ZEPP_COOKIE environment variable (auto-parsed)
 """
 
 from __future__ import annotations
@@ -18,10 +18,10 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-# 中国区默认 host
+# Default host for China region
 DEFAULT_HOST = "api-mifit-cn3.zepp.com"
 
-# 配置字段与环境变量的映射
+# Mapping of config fields to environment variables
 ENV_MAP = {
     "app_token": "ZEPP_APP_TOKEN",
     "user_id": "ZEPP_USER_ID",
@@ -33,17 +33,17 @@ ENV_MAP = {
     "cookie": "ZEPP_COOKIE",
 }
 
-# region 到 host 的映射
+# Region to host mapping
 REGION_HOSTS = {
-    "1": "api-mifit-cn3.zepp.com",     # 中国
-    "2": "api-mifit-us3.zepp.com",     # 美国
-    "3": "api-mifit-eu3.zepp.com",     # 欧洲
-    "4": "api-mifit-sg3.zepp.com",     # 新加坡
+    "1": "api-mifit-cn3.zepp.com",     # China
+    "2": "api-mifit-us3.zepp.com",     # United States
+    "3": "api-mifit-eu3.zepp.com",     # Europe
+    "4": "api-mifit-sg3.zepp.com",     # Singapore
 }
 
 
 class AppConfig(BaseModel):
-    """应用配置。"""
+    """Application configuration."""
 
     app_token: str = ""
     user_id: str = ""
@@ -56,9 +56,9 @@ class AppConfig(BaseModel):
 
 
 def parse_cookie(cookie_str: str) -> dict[str, str]:
-    """从 cookie 字符串中解析配置字段。
+    """Parse configuration fields from a cookie string.
 
-    支持格式: "userid=xxx; apptoken=xxx; region=1"
+    Supported format: "userid=xxx; apptoken=xxx; region=1"
     """
     result: dict[str, str] = {}
     if not cookie_str:
@@ -72,14 +72,14 @@ def parse_cookie(cookie_str: str) -> dict[str, str]:
         key = key.strip()
         value = value.strip()
 
-        # 映射 cookie 字段名到配置字段名
+        # Map cookie field names to config field names
         if key == "userid":
             result["user_id"] = value
         elif key == "apptoken":
             result["app_token"] = value
         elif key == "region":
             result["region"] = value
-            # 根据 region 推断 host
+            # Infer host from region
             if value in REGION_HOSTS:
                 result["host"] = REGION_HOSTS[value]
 
@@ -87,25 +87,25 @@ def parse_cookie(cookie_str: str) -> dict[str, str]:
 
 
 def _config_search_paths(config_path: str | None = None) -> list[Path]:
-    """按优先级返回配置文件搜索路径。"""
+    """Return config file search paths in priority order."""
     paths: list[Path] = []
 
-    # CLI 指定的路径优先
+    # CLI-specified path takes priority
     if config_path:
         paths.append(Path(config_path).expanduser())
 
-    # 环境变量
+    # Environment variable
     env_path = os.environ.get("ZEPP_CONFIG", "").strip()
     if env_path:
         paths.append(Path(env_path).expanduser())
 
-    # 当前目录
+    # Current directory
     paths.append(Path.cwd() / "config.json")
 
-    # 用户配置目录
+    # User config directory
     paths.append(Path.home() / ".config" / "zepp-health" / "config.json")
 
-    # 去重
+    # Deduplicate
     seen: set[Path] = set()
     result: list[Path] = []
     for p in paths:
@@ -124,17 +124,17 @@ def load_config(
     user_id: str | None = None,
     host: str | None = None,
 ) -> AppConfig:
-    """加载配置，按优先级合并多个来源。
+    """Load configuration, merging multiple sources by priority.
 
-    优先级（高到低）：
-    1. CLI 参数（token, user_id, host）
-    2. cookie 参数
-    3. 配置文件
-    4. 环境变量
+    Priority (high to low):
+    1. CLI arguments (token, user_id, host)
+    2. cookie parameter
+    3. Config file
+    4. Environment variables
     """
     data: dict[str, Any] = {}
 
-    # 1. 从配置文件加载
+    # 1. Load from config file
     for p in _config_search_paths(config_path):
         if p.is_file():
             try:
@@ -144,18 +144,18 @@ def load_config(
                 continue
             break
 
-    # 2. 环境变量覆盖（包括 ZEPP_COOKIE）
+    # 2. Environment variable overrides (including ZEPP_COOKIE)
     for field_name, env_name in ENV_MAP.items():
         v = os.environ.get(env_name, "").strip()
         if v:
             data[field_name] = v
 
-    # 3. cookie 参数覆盖
+    # 3. Cookie parameter overrides
     if cookie:
         cookie_data = parse_cookie(cookie)
         data.update(cookie_data)
 
-    # 4. CLI 参数最高优先级
+    # 4. CLI arguments have highest priority
     if token:
         data["app_token"] = token
     if user_id:
@@ -163,20 +163,20 @@ def load_config(
     if host:
         data["host"] = host
 
-    # 如果有 cookie 字段但没有显式解析过，解析它
+    # If there is a cookie field but it hasn't been explicitly parsed, parse it
     if "cookie" in data and not data.get("app_token"):
         cookie_data = parse_cookie(data.pop("cookie"))
-        # cookie 解析的值优先级低于显式配置
+        # Parsed cookie values have lower priority than explicit config
         for k, v in cookie_data.items():
             if k not in data or not data[k]:
                 data[k] = v
     else:
         data.pop("cookie", None)
 
-    # 清理非配置字段
+    # Clean up non-config fields
     data.pop("_loaded_from", None)
 
-    # 设置默认 host
+    # Set default host
     if not data.get("host"):
         region = data.get("region", "1")
         data["host"] = REGION_HOSTS.get(region, DEFAULT_HOST)
@@ -185,7 +185,7 @@ def load_config(
 
 
 def save_config(data: dict[str, Any], path: Path) -> Path:
-    """保存配置到文件。"""
+    """Save configuration to file."""
     path.parent.mkdir(parents=True, exist_ok=True)
     clean = {k: v for k, v in data.items() if k in AppConfig.model_fields and v}
     path.write_text(json.dumps(clean, indent=2, ensure_ascii=False) + "\n")

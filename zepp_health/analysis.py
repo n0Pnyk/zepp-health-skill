@@ -1,6 +1,6 @@
-"""分析流水线。
+"""Analysis pipeline.
 
-协调数据获取、评分计算和报告生成。
+Coordinates data fetching, score computation, and report generation.
 """
 
 from __future__ import annotations
@@ -23,27 +23,27 @@ def generate_daily_report(
     client: ZeppClient,
     target_date: date | None = None,
 ) -> HealthReport:
-    """生成每日健康报告。
+    """Generate daily health report.
 
-    流程：
-    1. 拉取当天数据（band_data, readiness, stress, spo2）
-    2. 拉取历史数据（28 天运动, 60 天 readiness 用于基线）
-    3. 调用评分函数
-    4. 生成建议
-    5. 返回 HealthReport
+    Process:
+    1. Fetch today's data (band_data, readiness, stress, spo2)
+    2. Fetch historical data (28-day workouts, 60-day readiness for baseline)
+    3. Call scoring functions
+    4. Generate recommendations
+    5. Return HealthReport
     """
     if target_date is None:
         target_date = date.today()
 
     # ----------------------------------------------------------
-    # 1. 拉取当天数据
+    # 1. Fetch today's data
     # ----------------------------------------------------------
 
-    # Band data（步数、睡眠、心率摘要）
+    # Band data (steps, sleep, heart rate summary)
     daily_data = client.get_daily_data(target_date, target_date)
     today_activity = daily_data[0] if daily_data else None
 
-    # Readiness（HRV、RHR、准备度）
+    # Readiness (HRV, RHR, readiness)
     readiness_list = client.get_readiness_data(target_date, target_date)
     today_readiness = readiness_list[-1] if readiness_list else None
 
@@ -56,14 +56,14 @@ def generate_daily_report(
     today_spo2 = spo2_list[-1] if spo2_list else None
 
     # ----------------------------------------------------------
-    # 2. 拉取历史数据用于基线和训练负荷
+    # 2. Fetch historical data for baseline and training load
     # ----------------------------------------------------------
 
-    # 60 天 readiness 历史（用于 HRV/RHR 基线）
+    # 60-day readiness history (for HRV/RHR baseline)
     baseline_start = target_date - timedelta(days=60)
     readiness_history = client.get_readiness_data(baseline_start, target_date)
 
-    # 提取 HRV 和 RHR 历史序列
+    # Extract HRV and RHR history series
     hrv_history: list[int] = []
     rhr_history: list[int] = []
     for r in readiness_history:
@@ -76,47 +76,47 @@ def generate_daily_report(
         elif r.rhr_baseline and r.rhr_baseline > 0:
             rhr_history.append(r.rhr_baseline)
 
-    # 28 天运动历史（用于训练负荷）
+    # 28-day workout history (for training load)
     workout_start = target_date - timedelta(days=28)
     workouts_28d = client.get_workouts(workout_start, target_date)
     workouts_7d = [w for w in workouts_28d if (target_date - w.start_time.date()).days <= 7]
 
-    # Sport load（可选）
+    # Sport load (optional)
     sport_load = None
     try:
         sport_load = client.get_sport_load(workout_start, target_date)
     except Exception:
-        pass  # sport_load 端点可能不可用
+        pass  # sport_load endpoint may not be available
 
     # ----------------------------------------------------------
-    # 3. 提取当天指标值
+    # 3. Extract today's metric values
     # ----------------------------------------------------------
 
-    # HRV：优先用 sleep_hrv，其次用 hrv_baseline
+    # HRV: prefer sleep_hrv, fall back to hrv_baseline
     today_hrv: int | None = None
     if today_readiness:
         today_hrv = today_readiness.sleep_hrv or today_readiness.hrv_baseline
 
-    # RHR：优先用 sleep_rhr，其次用 band_data 中的 resting_heart_rate
+    # RHR: prefer sleep_rhr, fall back to resting_heart_rate from band_data
     today_rhr: int | None = None
     if today_readiness and today_readiness.sleep_rhr:
         today_rhr = today_readiness.sleep_rhr
     elif today_activity and today_activity.sleep and today_activity.sleep.resting_heart_rate:
         today_rhr = today_activity.sleep.resting_heart_rate
 
-    # 睡眠数据
+    # Sleep data
     sleep = today_activity.sleep if today_activity else None
 
-    # 平均压力
+    # Average stress
     avg_stress = today_stress.avg_stress if today_stress else None
 
-    # 平均血氧
+    # Average SpO2
     avg_spo2: int | None = None
     if today_spo2 and today_spo2.readings:
         avg_spo2 = int(sum(r.spo2 for r in today_spo2.readings) / len(today_spo2.readings))
 
     # ----------------------------------------------------------
-    # 4. 计算评分
+    # 4. Compute scores
     # ----------------------------------------------------------
 
     recovery = compute_recovery(
@@ -144,7 +144,7 @@ def generate_daily_report(
     )
 
     # ----------------------------------------------------------
-    # 5. 生成建议
+    # 5. Generate recommendations
     # ----------------------------------------------------------
 
     recommendations = generate_recommendations(
@@ -156,7 +156,7 @@ def generate_daily_report(
     )
 
     # ----------------------------------------------------------
-    # 6. 组装原始指标
+    # 6. Assemble raw metrics
     # ----------------------------------------------------------
 
     raw_metrics: dict = {}
@@ -183,7 +183,7 @@ def generate_daily_report(
         raw_metrics["spo2_odi"] = today_spo2.odi
 
     # ----------------------------------------------------------
-    # 7. 返回报告
+    # 7. Return report
     # ----------------------------------------------------------
 
     return HealthReport(
@@ -202,23 +202,23 @@ def generate_snapshot(
     client: ZeppClient,
     target_date: date | None = None,
 ) -> dict[str, Any]:
-    """导出 LLM 分析用的完整数据快照。
+    """Export a complete data snapshot for LLM analysis.
 
-    比 generate_daily_report() 更丰富，包含 7 天趋势数据。
-    输出为 dict，可直接 JSON 序列化。
+    Richer than generate_daily_report(), includes 7-day trend data.
+    Output is a dict, directly JSON-serializable.
     """
     if target_date is None:
         target_date = date.today()
 
-    # 当天报告
+    # Today's report
     report = generate_daily_report(client, target_date)
 
-    # 7 天趋势
+    # 7-day trends
     trend_start = target_date - timedelta(days=6)
     readiness_7d = client.get_readiness_data(trend_start, target_date)
     daily_7d = client.get_daily_data(trend_start, target_date)
 
-    # 构建日期索引
+    # Build date index
     readiness_map = {r.date: r for r in readiness_7d}
     daily_map = {d.date: d for d in daily_7d}
 
@@ -248,7 +248,7 @@ def generate_snapshot(
         else:
             sleep_score_trend.append(None)
 
-    # 身体电量 7 天
+    # Body battery 7-day
     for d in dates:
         start_ts = int(datetime.combine(d, datetime.min.time()).timestamp() * 1000)
         end_ts = int(datetime.combine(d, datetime.max.time()).timestamp() * 1000)
@@ -258,7 +258,7 @@ def generate_snapshot(
         except Exception:
             bb_trend.append(None)
 
-    # 7 天运动
+    # 7-day workouts
     workout_start = target_date - timedelta(days=6)
     workouts = client.get_workouts(workout_start, target_date)
     workouts_data = []
@@ -273,7 +273,7 @@ def generate_snapshot(
             "max_hr": w.max_heart_rate,
         })
 
-    # 组装快照
+    # Assemble snapshot
     today = report.raw_metrics
     snapshot: dict[str, Any] = {
         "date": target_date.isoformat(),
@@ -319,7 +319,7 @@ def generate_snapshot(
         },
     }
 
-    # 补充 readiness 详细数据
+    # Supplement readiness detail data
     today_readiness = readiness_map.get(target_date.isoformat())
     if today_readiness:
         skin_delta = None
@@ -332,16 +332,16 @@ def generate_snapshot(
             "skin_temp_delta": skin_delta,
         }
 
-    # 补充睡眠评分
+    # Supplement sleep score
     today_daily = daily_map.get(target_date.isoformat())
     if today_daily and today_daily.sleep:
         snapshot["today"]["sleep"]["score"] = today_daily.sleep.sleep_score
         snapshot["today"]["sleep"]["wake_count"] = today_daily.sleep.wake_count
 
-    # 补充身体电量
+    # Supplement body battery
     snapshot["today"]["body_battery"] = bb_trend[-1] if bb_trend else None
 
-    # 补充呼吸频率
+    # Supplement respiratory rate
     try:
         resp_ts_start = int(datetime.combine(target_date, datetime.min.time()).timestamp() * 1000)
         resp_ts_end = int(datetime.combine(target_date, datetime.max.time()).timestamp() * 1000)
@@ -351,7 +351,7 @@ def generate_snapshot(
     except Exception:
         pass
 
-    # 补充压力详情
+    # Supplement stress details
     stress_list = client.get_stress_data(target_date, target_date)
     if stress_list:
         st = stress_list[-1]

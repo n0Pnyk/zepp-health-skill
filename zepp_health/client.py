@@ -1,7 +1,7 @@
-"""Zepp Health API 客户端。
+"""Zepp Health API client.
 
-合并 amazfit-cli 和 zepp-health-cli 两个参考项目的端点。
-使用 httpx 作为 HTTP 客户端，支持 context manager。
+Merges endpoints from amazfit-cli and zepp-health-cli reference projects.
+Uses httpx as the HTTP client with context manager support.
 """
 
 from __future__ import annotations
@@ -42,7 +42,7 @@ from zepp_health.models import (
     WORKOUT_TYPES,
 )
 
-# API 基础 URL
+# API base URL
 BAND_DATA_PATH = "/v1/data/band_data.json"
 EVENTS_PATH = "/users/{user_id}/events"
 EVENTS_V2_PATH = "/v2/users/me/events"
@@ -52,7 +52,7 @@ WEIGHT_PATH = "/users/{user_id}/members/-1/weightRecords"
 BLOOD_PRESSURE_PATH = "/users/me/bloodPressure"
 SPORT_STATS_PATH = "/v2/watch/users/{user_id}/WatchSportStatistics/{stat_type}"
 
-# 活动模式代码
+# Activity mode codes
 ACTIVITY_MODES = {
     1: "slow_walking",
     3: "fast_walking",
@@ -72,12 +72,12 @@ ACTIVITY_MODES = {
 
 
 class ZeppClientError(Exception):
-    """API 客户端错误。"""
+    """API client error."""
     pass
 
 
 class ZeppClient:
-    """Zepp Health API 客户端。"""
+    """Zepp Health API client."""
 
     def __init__(self, config: AppConfig):
         self._config = config
@@ -108,21 +108,21 @@ class ZeppClient:
         self.close()
 
     def close(self):
-        """关闭 HTTP 客户端。"""
+        """Close the HTTP client."""
         self._http.close()
 
     # ----------------------------------------------------------
-    # 内部工具方法
+    # Internal utility methods
     # ----------------------------------------------------------
 
     @staticmethod
     def _r() -> str:
-        """生成随机 UUID 用于防缓存。"""
+        """Generate a random UUID for cache busting."""
         return str(uuid.uuid4()).upper()
 
     @staticmethod
     def _normalize_timestamp(ts: int | float | None) -> float:
-        """将毫秒时间戳转换为秒。"""
+        """Convert a millisecond timestamp to seconds."""
         if not ts:
             return 0
         if ts > 1e12:
@@ -131,14 +131,14 @@ class ZeppClient:
 
     @staticmethod
     def _date_str_from_ts(ts: int | float) -> str:
-        """从时间戳获取日期字符串 YYYY-MM-DD。"""
+        """Get a YYYY-MM-DD date string from a timestamp."""
         return datetime.fromtimestamp(
             ZeppClient._normalize_timestamp(ts)
         ).strftime("%Y-%m-%d")
 
     @staticmethod
     def _safe_json_loads(raw: str | None, default: Any = None) -> Any:
-        """安全解析 JSON。"""
+        """Safely parse JSON."""
         if not raw:
             return default
         try:
@@ -148,7 +148,7 @@ class ZeppClient:
 
     @staticmethod
     def _decode_summary(summary_b64: str) -> Optional[dict]:
-        """解码 base64 编码的 summary 数据。"""
+        """Decode base64-encoded summary data."""
         try:
             decoded = base64.b64decode(summary_b64)
             data = json.loads(decoded)
@@ -161,18 +161,18 @@ class ZeppClient:
 
     @staticmethod
     def _date_range_to_ms(start: datetime, end: datetime) -> tuple[int, int]:
-        """日期范围转毫秒时间戳。"""
+        """Convert a date range to millisecond timestamps."""
         start_ts = int(datetime.combine(start, datetime.min.time()).timestamp())
         end_ts = int(datetime.combine(end, datetime.max.time()).timestamp())
         return start_ts * 1000, end_ts * 1000
 
     def _get_json(self, path: str, params: dict[str, Any]) -> Any:
-        """发送 GET 请求并返回 JSON 响应。"""
+        """Send a GET request and return the JSON response."""
         params["r"] = self._r()
         response = self._http.get(path, params=params)
         if response.status_code != 200:
             raise ZeppClientError(
-                f"API 请求失败: {response.status_code} - {response.text[:200]}"
+                f"API request failed: {response.status_code} - {response.text[:200]}"
             )
         return response.json()
 
@@ -185,7 +185,7 @@ class ZeppClient:
         sub_type: Optional[str] = None,
         extra_params: Optional[dict] = None,
     ) -> list[dict]:
-        """分页获取事件数据。"""
+        """Fetch event data with pagination."""
         url = EVENTS_PATH.format(user_id=self._user_id)
         start_ms, end_ms = self._date_range_to_ms(start_date, end_date)
 
@@ -215,7 +215,7 @@ class ZeppClient:
             if len(batch) < params["limit"]:
                 break
 
-            # 推进游标到最后一个时间戳
+            # Advance cursor to the last timestamp
             max_ts = 0
             for item in batch:
                 ts = self._normalize_timestamp(item.get("timestamp", 0))
@@ -238,7 +238,7 @@ class ZeppClient:
         *,
         limit: int = 200,
     ) -> list[dict]:
-        """从 v2 事件端点获取数据。"""
+        """Fetch data from the v2 events endpoint."""
         params: dict[str, Any] = {
             "eventType": event_type,
             "subType": sub_type,
@@ -251,7 +251,7 @@ class ZeppClient:
         return result.get("items", [])
 
     # ----------------------------------------------------------
-    # Band Data（步数、睡眠、心率摘要）
+    # Band Data (steps, sleep, heart rate summaries)
     # ----------------------------------------------------------
 
     def get_band_data(
@@ -259,7 +259,7 @@ class ZeppClient:
         start_date: date,
         end_date: date,
     ) -> list[dict]:
-        """获取原始 band 数据。"""
+        """Get raw band data."""
         params = {
             "query_type": "summary",
             "device_type": "ios_phone",
@@ -269,7 +269,7 @@ class ZeppClient:
         }
         result = self._get_json(BAND_DATA_PATH, params)
         if result.get("code") != 1:
-            raise ZeppClientError(f"API 错误: {result.get('message', '未知错误')}")
+            raise ZeppClientError(f"API error: {result.get('message', 'Unknown error')}")
         return result.get("data", [])
 
     def get_daily_data(
@@ -277,12 +277,12 @@ class ZeppClient:
         start_date: date,
         end_date: date,
     ) -> list[ActivityData]:
-        """获取解析后的每日活动数据。"""
+        """Get parsed daily activity data."""
         raw_data = self.get_band_data(start_date, end_date)
         return [self._parse_day_data(day) for day in raw_data]
 
     def _parse_day_data(self, raw: dict) -> ActivityData:
-        """解析原始 band 数据为 ActivityData。"""
+        """Parse raw band data into ActivityData."""
         date_str = raw.get("date_time", raw.get("dateTime", ""))
         activity = ActivityData(date=date_str)
 
@@ -297,7 +297,7 @@ class ZeppClient:
         return activity
 
     def _parse_step_summary(self, summary: dict, date_str: str) -> Optional[StepData]:
-        """从 summary 解析步数数据。"""
+        """Parse step data from summary."""
         try:
             stp = summary.get("stp", {})
             if isinstance(stp, dict):
@@ -317,7 +317,7 @@ class ZeppClient:
         return None
 
     def _parse_sleep_from_summary(self, summary: dict, date_str: str) -> Optional[SleepData]:
-        """从 summary 解析睡眠数据。"""
+        """Parse sleep data from summary."""
         try:
             slp = summary.get("slp", {})
             if not slp or not isinstance(slp, dict):
@@ -342,7 +342,7 @@ class ZeppClient:
                 start_time = base_date + timedelta(minutes=start_ts)
                 end_time = base_date + timedelta(minutes=end_ts)
 
-            # 解析睡眠阶段
+            # Parse sleep phases
             phases = []
             for stage in slp.get("stage", []):
                 phase_start = stage.get("start", 0)
@@ -382,7 +382,7 @@ class ZeppClient:
             return None
 
     def _parse_hr_from_summary(self, summary: dict, date_str: str) -> list[HeartRateData]:
-        """从 summary 解析心率数据。"""
+        """Parse heart rate data from summary."""
         heart_rates = []
         try:
             base_date = datetime.strptime(date_str, "%Y-%m-%d") if date_str else datetime.now()
@@ -408,7 +408,7 @@ class ZeppClient:
         return heart_rates
 
     def _parse_activities_from_summary(self, summary: dict, date_str: str) -> list[ActivitySummary]:
-        """从 summary 解析活动阶段。"""
+        """Parse activity phases from summary."""
         activities = []
         try:
             stp = summary.get("stp", {})
@@ -436,7 +436,7 @@ class ZeppClient:
         return activities
 
     # ----------------------------------------------------------
-    # 每日汇总
+    # Daily summaries
     # ----------------------------------------------------------
 
     def get_summary(
@@ -444,7 +444,7 @@ class ZeppClient:
         start_date: date,
         end_date: date,
     ) -> list[DaySummary]:
-        """获取每日汇总数据。"""
+        """Get daily summary data."""
         daily_data = self.get_daily_data(start_date, end_date)
         summaries = []
 
@@ -477,7 +477,7 @@ class ZeppClient:
         return summaries
 
     # ----------------------------------------------------------
-    # Events 端点（压力、血氧、PAI、准备度）
+    # Events endpoints (stress, SpO2, PAI, readiness)
     # ----------------------------------------------------------
 
     def get_stress_data(
@@ -485,7 +485,7 @@ class ZeppClient:
         start_date: date,
         end_date: date,
     ) -> list[StressData]:
-        """获取压力数据。"""
+        """Get stress data."""
         start_dt = datetime.combine(start_date, datetime.min.time())
         end_dt = datetime.combine(end_date, datetime.max.time())
         items = self._get_events("all_day_stress", start_dt, end_dt)
@@ -522,7 +522,7 @@ class ZeppClient:
         start_date: date,
         end_date: date,
     ) -> list[SpO2Data]:
-        """获取血氧数据。"""
+        """Get blood oxygen (SpO2) data."""
         start_dt = datetime.combine(start_date, datetime.min.time())
         end_dt = datetime.combine(end_date, datetime.max.time())
         items = self._get_events(
@@ -604,7 +604,7 @@ class ZeppClient:
         start_date: date,
         end_date: date,
     ) -> list[PAIData]:
-        """获取 PAI 数据。"""
+        """Get PAI data."""
         start_dt = datetime.combine(start_date, datetime.min.time())
         end_dt = datetime.combine(end_date, datetime.max.time())
         items = self._get_events("PaiHealthInfo", start_dt, end_dt)
@@ -630,7 +630,7 @@ class ZeppClient:
         start_date: date,
         end_date: date,
     ) -> list[ReadinessData]:
-        """获取准备度/恢复数据。"""
+        """Get readiness/recovery data."""
         start_dt = datetime.combine(start_date, datetime.min.time())
         end_dt = datetime.combine(end_date, datetime.max.time())
         items = self._get_events("readiness", start_dt, end_dt)
@@ -683,7 +683,7 @@ class ZeppClient:
                 afib_baseline=_int(item.get("afibBaseLine")),
             )
 
-            # 每天保留数据最完整的记录
+            # Keep the record with the most complete data per day
             if date_str not in daily_data:
                 daily_data[date_str] = readiness
             else:
@@ -696,7 +696,7 @@ class ZeppClient:
         return sorted(daily_data.values(), key=lambda x: x.date)
 
     # ----------------------------------------------------------
-    # 运动数据
+    # Workout data
     # ----------------------------------------------------------
 
     def get_workouts(
@@ -704,7 +704,7 @@ class ZeppClient:
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
     ) -> list[Workout]:
-        """获取运动历史。"""
+        """Get workout history."""
         params: dict[str, Any] = {}
         workouts: list[Workout] = []
         seen_track_ids: set[str] = set()
@@ -717,7 +717,7 @@ class ZeppClient:
             result = self._get_json(WORKOUT_HISTORY_PATH, params)
 
             if result.get("code") != 1:
-                raise ZeppClientError(f"API 错误: {result.get('message', '未知错误')}")
+                raise ZeppClientError(f"API error: {result.get('message', 'Unknown error')}")
 
             data = result.get("data", {})
             summary_list = data.get("summary", [])
@@ -757,7 +757,7 @@ class ZeppClient:
                     load = item.get("exercise_load")
                     exercise_load = int(load) if load and int(load) > 0 else None
 
-                    # 解析心率区间
+                    # Parse heart rate zones
                     hr_zones = []
                     hr_range = item.get("heart_range", "")
                     if hr_range:
@@ -812,7 +812,7 @@ class ZeppClient:
         return workouts
 
     # ----------------------------------------------------------
-    # 额外端点（来自 zepp-health-cli）
+    # Additional endpoints (from zepp-health-cli)
     # ----------------------------------------------------------
 
     def get_sport_load(
@@ -820,7 +820,7 @@ class ZeppClient:
         start_date: date,
         end_date: date,
     ) -> list[SportLoadRecord]:
-        """获取运动负荷数据。"""
+        """Get sport load data."""
         path = SPORT_STATS_PATH.format(user_id=self._user_id, stat_type="SPORT_LOAD")
         params = {
             "startDay": start_date.isoformat(),
@@ -845,7 +845,7 @@ class ZeppClient:
         start_date: date,
         end_date: date,
     ) -> list[VO2MaxRecord]:
-        """获取 VO2 max 数据。"""
+        """Get VO2 max data."""
         path = SPORT_STATS_PATH.format(user_id=self._user_id, stat_type="VO2_MAX")
         params = {
             "startDay": start_date.isoformat(),
@@ -874,7 +874,7 @@ class ZeppClient:
         *,
         limit: int = 1000,
     ) -> list[HeartRateData]:
-        """获取心率样本数据。"""
+        """Get heart rate sample data."""
         params = {
             "startTime": start_ts,
             "endTime": end_ts,
@@ -904,7 +904,7 @@ class ZeppClient:
         *,
         limit: int = 300,
     ) -> list[WeightRecord]:
-        """获取体重记录。"""
+        """Get weight records."""
         params = {
             "fromTime": start_ts,
             "toTime": end_ts,
@@ -936,7 +936,7 @@ class ZeppClient:
         days: int = 7,
         to_date: Optional[date] = None,
     ) -> list[BloodPressureRecord]:
-        """获取血压数据。"""
+        """Get blood pressure data."""
         td = to_date or date.today()
         params = {
             "days": days,
@@ -965,10 +965,10 @@ class ZeppClient:
         start_ts: int,
         end_ts: int,
     ) -> list[BodyBatteryReading]:
-        """获取身体电量数据。
+        """Get body battery data.
 
-        value 结构是 dict，包含 samples 数组。
-        每个 sample: {s: 偏移ms, total: 总电量, mental: 心理电量, physical: 身体电量}
+        The value structure is a dict containing a samples array.
+        Each sample: {s: offset_ms, total: total_charge, mental: mental_charge, physical: physical_charge}
         """
         items = self._get_v2_events(
             "Charge", "real_data", start_ts, end_ts,
@@ -981,11 +981,11 @@ class ZeppClient:
             if not ts:
                 continue
 
-            # value 可能是 dict（包含 samples）或直接是数字
+            # value may be a dict (containing samples) or a plain number
             if isinstance(value, dict):
                 samples = value.get("samples", [])
                 if samples:
-                    # 取第一个有效 sample（total != 255, 255 表示无效）
+                    # Take the first valid sample (total != 255; 255 means invalid)
                     valid_sample = None
                     for s in samples:
                         t = s.get("total", 255)
@@ -995,7 +995,7 @@ class ZeppClient:
                     if not valid_sample:
                         valid_sample = samples[0]
                     total = valid_sample.get("total", 0)
-                    # API 返回的 total 有 -3 偏移，app 端加 3 还原
+                    # The API returns total with a -3 offset; the app adds 3 to restore it
                     display_value = int(total) + 3 if total != 255 else 0
                     readings.append(BodyBatteryReading(
                         timestamp=datetime.fromtimestamp(ts),
@@ -1015,9 +1015,9 @@ class ZeppClient:
         *,
         hrv_type: str = "sdnn",
     ) -> list[HRVReading]:
-        """获取 HRV 数据。
+        """Get HRV data.
 
-        hrv_type: "sdnn" 或 "rmssd"
+        hrv_type: "sdnn" or "rmssd"
         """
         event_type = "hrv_sdnn" if hrv_type == "sdnn" else "HRVRMSSD"
         items = self._get_v2_events(
@@ -1029,9 +1029,9 @@ class ZeppClient:
             value = item.get("value", 0)
             if not ts or not value:
                 continue
-            # value 可能是 dict 或数字
+            # value may be a dict or a number
             if isinstance(value, dict):
-                # 尝试从常见字段提取
+                # Try extracting from common fields
                 v = value.get("value") or value.get("hrv") or value.get("total", 0)
             else:
                 v = value
@@ -1048,7 +1048,7 @@ class ZeppClient:
         start_ts: int,
         end_ts: int,
     ) -> list[RespiratoryRateReading]:
-        """获取呼吸频率数据。"""
+        """Get respiratory rate data."""
         items = self._get_v2_events(
             "RespiratoryRate", "real_data", start_ts, end_ts,
         )
@@ -1058,7 +1058,7 @@ class ZeppClient:
             value = item.get("value", 0)
             if not ts or not value:
                 continue
-            # value 可能是 dict（含 measurements）或数字
+            # value may be a dict (containing measurements) or a number
             if isinstance(value, dict):
                 v = value.get("value") or value.get("rpm") or value.get("total", 0)
             else:

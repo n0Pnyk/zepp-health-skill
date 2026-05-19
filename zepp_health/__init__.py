@@ -1,6 +1,6 @@
-"""Zepp Health 数据分析工具。
+"""Zepp Health data analysis toolkit.
 
-通过 Zepp/Amazfit API 拉取健康数据，进行归一化处理和健康评分分析。
+Fetches health data via the Zepp/Amazfit API, performs normalization and health score analysis.
 """
 
 from zepp_health.client import ZeppClient

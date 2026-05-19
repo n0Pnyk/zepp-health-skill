@@ -1,10 +1,10 @@
-"""健康评分算法。
+"""Health scoring algorithm.
 
-参考 Athlytic app 的评分逻辑：
-- Recovery: 基于 HRV/RHR 的 60 天滚动基线对比
-- Sleep Quality: 多维度睡眠质量评估
-- Exertion: 急性/慢性训练负荷比率
-- Overall: 加权综合健康分
+Referencing the Athlytic app scoring logic:
+- Recovery: Based on HRV/RHR 60-day rolling baseline comparison
+- Sleep Quality: Multi-dimensional sleep quality assessment
+- Exertion: Acute/chronic training load ratio
+- Overall: Weighted composite health score
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ from zepp_health.models import (
 
 
 def _clamp(value: float, lo: float = 0, hi: float = 100) -> float:
-    """将值限制在 [lo, hi] 范围内。"""
+    """Clamp value to the [lo, hi] range."""
     return max(lo, min(hi, value))
 
 
@@ -33,9 +33,9 @@ def compute_baseline(
     values: list[float],
     window: int = 60,
 ) -> tuple[float, float]:
-    """计算滚动基线（均值和标准差）。
+    """Compute rolling baseline (mean and standard deviation).
 
-    返回 (mean, std)。如果数据不足，std 可能为 0。
+    Returns (mean, std). If insufficient data, std may be 0.
     """
     recent = values[-window:]
     if not recent:
@@ -49,10 +49,10 @@ def compute_baseline(
 
 
 def _z_score_to_100(value: float, mean: float, std: float, invert: bool = False) -> int:
-    """将 z-score 映射到 0-100 分。
+    """Map z-score to a 0-100 score.
 
-    invert=True 时反转方向（值越低越好，如 RHR）。
-    基于 60 天滚动基线的 z-score，线性映射到 0-100。
+    invert=True reverses direction (lower is better, e.g. RHR).
+    Based on z-score from 60-day rolling baseline, linearly mapped to 0-100.
     """
     if std == 0:
         return 50
@@ -72,9 +72,10 @@ def _detect_fatigue(
     rhr_baseline: float,
     consecutive_days: int = 3,
 ) -> bool:
-    """检测疲劳信号。
+    """Detect fatigue signals.
 
-    如果 HRV 连续 N 天低于基线且 RHR 连续 N 天高于基线，返回 True。
+    Returns True if HRV is below baseline for N consecutive days
+    and RHR is above baseline for N consecutive days.
     """
     if len(hrv_history) < consecutive_days or len(rhr_history) < consecutive_days:
         return False
@@ -86,9 +87,9 @@ def _detect_fatigue(
 
 
 def _compute_trend(values: list[float], window: int = 7) -> str:
-    """计算趋势（基于 7 天线性回归斜率）。
+    """Compute trend based on 7-day linear regression slope.
 
-    返回 "improving"、"declining" 或 "stable"。
+    Returns "improving", "declining", or "stable".
     """
     recent = values[-window:]
     if len(recent) < 3:
@@ -106,7 +107,7 @@ def _compute_trend(values: list[float], window: int = 7) -> str:
 
     slope = numerator / denominator
 
-    # 根据数据范围动态调整阈值
+    # Dynamically adjust threshold based on data range
     data_range = max(recent) - min(recent) if recent else 1
     threshold = data_range * 0.05 if data_range > 0 else 0.5
 
@@ -118,7 +119,7 @@ def _compute_trend(values: list[float], window: int = 7) -> str:
 
 
 # ============================================================
-# Recovery Score（恢复评分）
+# Recovery Score
 # ============================================================
 
 
@@ -129,30 +130,30 @@ def compute_recovery(
     rhr_history: list[int],
     readiness: Optional[ReadinessData] = None,
 ) -> RecoveryScore:
-    """计算恢复评分 (0-100)。
+    """Compute recovery score (0-100).
 
-    基于 HRV 和 RHR 与 60 天滚动基线的对比。
-    HRV 权重 0.6，RHR 权重 0.4。
+    Based on comparison of HRV and RHR against 60-day rolling baseline.
+    HRV weight: 0.6, RHR weight: 0.4.
 
-    如果没有足够的历史数据，使用 Zepp 内置的 readiness_score 作为回退。
+    If insufficient history data, falls back to Zepp's built-in readiness_score.
     """
-    # 尝试从历史数据计算基线
+    # Try computing baseline from historical data
     hrv_floats = [float(v) for v in hrv_history if v > 0]
     rhr_floats = [float(v) for v in rhr_history if v > 0]
 
     hrv_mean, hrv_std = compute_baseline(hrv_floats)
     rhr_mean, rhr_std = compute_baseline(rhr_floats)
 
-    # 如果有 Zepp 内置基线且历史数据不足，使用内置基线
+    # If Zepp built-in baseline is available and history is insufficient, use it
     if readiness:
         if hrv_std == 0 and readiness.hrv_baseline:
             hrv_mean = float(readiness.hrv_baseline)
-            hrv_std = hrv_mean * 0.15  # 估算标准差
+            hrv_std = hrv_mean * 0.15  # Estimate standard deviation
         if rhr_std == 0 and readiness.rhr_baseline:
             rhr_mean = float(readiness.rhr_baseline)
             rhr_std = rhr_mean * 0.08
 
-    # 计算各分项
+    # Compute individual components
     hrv_component: Optional[int] = None
     rhr_component: Optional[int] = None
 
@@ -166,7 +167,7 @@ def compute_recovery(
     elif readiness and readiness.rhr_score is not None:
         rhr_component = readiness.rhr_score
 
-    # 加权组合
+    # Weighted combination
     if hrv_component is not None and rhr_component is not None:
         score = int(_clamp(0.6 * hrv_component + 0.4 * rhr_component))
     elif hrv_component is not None:
@@ -174,29 +175,29 @@ def compute_recovery(
     elif rhr_component is not None:
         score = rhr_component
     elif readiness and readiness.readiness_score is not None:
-        # 完全回退到 Zepp 内置评分
+        # Fully fall back to Zepp built-in score
         score = readiness.readiness_score
     else:
         score = 0
 
-    # 疲劳检测
+    # Fatigue detection
     fatigue = _detect_fatigue(hrv_floats, rhr_floats, hrv_mean, rhr_mean)
 
-    # 趋势计算
+    # Trend computation
     trend = _compute_trend(hrv_floats) if len(hrv_floats) >= 3 else "stable"
 
-    # 生成描述
+    # Generate description
     details_parts = []
     if today_hrv and hrv_mean > 0:
         diff_pct = (today_hrv - hrv_mean) / hrv_mean * 100
-        direction = "高于" if diff_pct > 0 else "低于"
-        details_parts.append(f"HRV {today_hrv}ms（{direction}基线 {abs(diff_pct):.0f}%）")
+        direction = "above" if diff_pct > 0 else "below"
+        details_parts.append(f"HRV {today_hrv}ms ({direction} baseline by {abs(diff_pct):.0f}%)")
     if today_rhr and rhr_mean > 0:
         diff = today_rhr - rhr_mean
-        direction = "高于" if diff > 0 else "低于"
-        details_parts.append(f"RHR {today_rhr}bpm（{direction}基线 {abs(diff):.0f}bpm）")
+        direction = "above" if diff > 0 else "below"
+        details_parts.append(f"RHR {today_rhr}bpm ({direction} baseline by {abs(diff):.0f}bpm)")
     if fatigue:
-        details_parts.append("检测到疲劳信号：HRV 持续偏低且 RHR 持续偏高")
+        details_parts.append("Fatigue signal detected: HRV consistently low and RHR consistently high")
 
     return RecoveryScore(
         score=score,
@@ -204,12 +205,12 @@ def compute_recovery(
         rhr_component=rhr_component,
         trend=trend,
         fatigue_signal=fatigue,
-        details="；".join(details_parts) if details_parts else "数据不足，使用设备内置评分",
+        details="; ".join(details_parts) if details_parts else "Insufficient data, using device built-in score",
     )
 
 
 # ============================================================
-# Sleep Quality Score（睡眠质量评分）
+# Sleep Quality Score
 # ============================================================
 
 
@@ -217,59 +218,59 @@ def compute_sleep_quality(
     sleep: Optional[SleepData],
     age: int = 30,
 ) -> Optional[SleepQualityScore]:
-    """计算睡眠质量评分 (0-100)。
+    """Compute sleep quality score (0-100).
 
-    维度和权重：
-    - 时长 (0.25): 目标 7-9 小时
-    - 深睡占比 (0.25): 目标 15-20%
-    - REM 占比 (0.20): 目标 20-25%
-    - 睡眠效率 (0.15): 目标 ≥85%
-    - 中断惩罚 (0.15): 基于醒来次数和清醒时长
+    Dimensions and weights:
+    - Duration (0.25): Target 7-9 hours
+    - Deep sleep ratio (0.25): Target 15-20%
+    - REM ratio (0.20): Target 20-25%
+    - Sleep efficiency (0.15): Target >= 85%
+    - Interruption penalty (0.15): Based on wake count and awake duration
     """
     if not sleep or sleep.total_minutes == 0:
         return None
 
     total = sleep.total_minutes
 
-    # 1. 时长评分
+    # 1. Duration score
     if age < 18:
-        target_min, target_max = 480, 600  # 8-10 小时
+        target_min, target_max = 480, 600  # 8-10 hours
     elif age < 65:
-        target_min, target_max = 420, 540  # 7-9 小时
+        target_min, target_max = 420, 540  # 7-9 hours
     else:
-        target_min, target_max = 390, 510  # 6.5-8.5 小时
+        target_min, target_max = 390, 510  # 6.5-8.5 hours
 
     if total < target_min:
         duration_score = _clamp((total / target_min) * 100)
     elif total > target_max:
-        # 超时也扣分
+        # Oversleeping also incurs a penalty
         over = total - target_max
         duration_score = _clamp(100 - over * 0.5)
     else:
         duration_score = 100
 
-    # 2. 深睡占比评分
+    # 2. Deep sleep ratio score
     deep_pct = (sleep.deep_sleep_minutes / total * 100) if total > 0 else 0
-    deep_score = _clamp(deep_pct / 17.5 * 100)  # 目标 17.5%
+    deep_score = _clamp(deep_pct / 17.5 * 100)  # Target 17.5%
 
-    # 3. REM 占比评分
+    # 3. REM ratio score
     rem_pct = (sleep.rem_sleep_minutes / total * 100) if total > 0 else 0
-    rem_score = _clamp(rem_pct / 22.5 * 100)  # 目标 22.5%
+    rem_score = _clamp(rem_pct / 22.5 * 100)  # Target 22.5%
 
-    # 4. 睡眠效率
+    # 4. Sleep efficiency
     if sleep.total_bed_time and sleep.total_bed_time > 0:
         efficiency = (total / sleep.total_bed_time) * 100
         efficiency_score = _clamp(efficiency / 85 * 100)
     else:
-        # 没有卧床时间数据时，用清醒时长估算
+        # When no time-in-bed data is available, estimate from awake duration
         awake_ratio = (sleep.wake_minutes / (total + sleep.wake_minutes)) if (total + sleep.wake_minutes) > 0 else 0
         efficiency_score = _clamp((1 - awake_ratio) * 100 / 0.85)
 
-    # 5. 中断惩罚
+    # 5. Interruption penalty
     wake_penalty = sleep.wake_count * 12 + sleep.wake_minutes * 1.5
     interruption_score = _clamp(100 - wake_penalty)
 
-    # 加权组合
+    # Weighted combination
     score = int(_clamp(
         0.25 * duration_score +
         0.25 * deep_score +
@@ -278,18 +279,18 @@ def compute_sleep_quality(
         0.15 * interruption_score
     ))
 
-    # 生成描述
+    # Generate description
     details_parts = []
     hours = total // 60
     mins = total % 60
-    details_parts.append(f"总时长 {hours}h{mins}m")
+    details_parts.append(f"Total duration {hours}h{mins}m")
 
     if deep_pct > 0:
-        details_parts.append(f"深睡 {deep_pct:.0f}%{'（达标）' if 15 <= deep_pct <= 20 else '（偏低）'}")
+        details_parts.append(f"Deep sleep {deep_pct:.0f}%{' (on target)' if 15 <= deep_pct <= 20 else ' (below target)'}")
     if rem_pct > 0:
-        details_parts.append(f"REM {rem_pct:.0f}%{'（达标）' if 20 <= rem_pct <= 25 else '（偏低）'}")
+        details_parts.append(f"REM {rem_pct:.0f}%{' (on target)' if 20 <= rem_pct <= 25 else ' (below target)'}")
     if sleep.wake_count > 0:
-        details_parts.append(f"醒来 {sleep.wake_count} 次")
+        details_parts.append(f"Woke up {sleep.wake_count} time(s)")
 
     return SleepQualityScore(
         score=score,
@@ -297,12 +298,12 @@ def compute_sleep_quality(
         rem_sleep_pct=round(rem_pct, 1),
         efficiency_pct=round(efficiency_score, 1),
         duration_minutes=total,
-        details="；".join(details_parts),
+        details="; ".join(details_parts),
     )
 
 
 # ============================================================
-# Exertion Score（训练负荷评分）
+# Exertion Score
 # ============================================================
 
 
@@ -311,28 +312,28 @@ def compute_exertion(
     workouts_28d: list[Workout],
     sport_load: Optional[list[SportLoadRecord]] = None,
 ) -> ExertionScore:
-    """计算训练负荷评分 (0-100)。
+    """Compute training load score (0-100).
 
-    基于急性（7天）/ 慢性（28天）训练负荷比率。
+    Based on acute (7-day) / chronic (28-day) training load ratio.
     """
-    # 计算急性负荷（7天）
+    # Compute acute load (7 days)
     acute_load = 0.0
     for w in workouts_7d:
         if w.exercise_load and w.exercise_load > 0:
             acute_load += w.exercise_load
         elif w.duration_seconds > 0 and w.avg_heart_rate:
-            # 估算负荷：时长(分钟) * 心率强度
+            # Estimate load: duration (minutes) * heart rate intensity
             duration_min = w.duration_seconds / 60
-            hr_intensity = w.avg_heart_rate / 190  # 假设最大心率 190
+            hr_intensity = w.avg_heart_rate / 190  # Assume max HR of 190
             acute_load += duration_min * hr_intensity * 10
 
-    # 如果没有运动数据，尝试用 sport_load
+    # If no workout data, try using sport_load
     if acute_load == 0 and sport_load:
         for sl in sport_load[-7:]:
             if sl.wtl_sum:
                 acute_load += sl.wtl_sum
 
-    # 计算慢性负荷（28天平均每周）
+    # Compute chronic load (28-day weekly average)
     chronic_weekly = 0.0
     if workouts_28d:
         total_load = 0.0
@@ -343,18 +344,18 @@ def compute_exertion(
                 duration_min = w.duration_seconds / 60
                 hr_intensity = w.avg_heart_rate / 190
                 total_load += duration_min * hr_intensity * 10
-        chronic_weekly = total_load / 4  # 4 周平均
+        chronic_weekly = total_load / 4  # 4-week average
     elif sport_load and len(sport_load) >= 7:
         total = sum(sl.wtl_sum or 0 for sl in sport_load[-28:])
         chronic_weekly = total / 4
 
-    # 计算比率
+    # Compute ratio
     if chronic_weekly > 0:
         ratio = acute_load / chronic_weekly
     else:
         ratio = 0
 
-    # 区间映射
+    # Zone mapping
     if ratio < 0.8:
         zone = "detraining"
         score = int(_clamp(ratio / 0.8 * 40))
@@ -371,19 +372,19 @@ def compute_exertion(
         zone = "high_risk"
         score = int(_clamp(90 + min((ratio - 1.5) / 0.5 * 10, 10)))
 
-    # 生成描述
+    # Generate description
     zone_desc = {
-        "detraining": "训练不足，建议增加运动量",
-        "maintaining": "维持状态，训练量适中",
-        "productive": "有效提升，训练效果良好",
-        "overreaching": "负荷偏高，注意恢复",
-        "high_risk": "过度训练风险，建议休息",
-        "inactive": "无运动数据",
+        "detraining": "Undertrained, consider increasing exercise volume",
+        "maintaining": "Maintaining, moderate training volume",
+        "productive": "Effective improvement, good training response",
+        "overreaching": "Load is high, pay attention to recovery",
+        "high_risk": "Risk of overtraining, consider rest days",
+        "inactive": "No workout data",
     }
 
-    details = f"7天负荷 {acute_load:.0f}，28天周均 {chronic_weekly:.0f}，比率 {ratio:.2f}"
+    details = f"7-day load {acute_load:.0f}, 28-day weekly avg {chronic_weekly:.0f}, ratio {ratio:.2f}"
     if zone in zone_desc:
-        details += f"（{zone_desc[zone]}）"
+        details += f" ({zone_desc[zone]})"
 
     return ExertionScore(
         score=score if acute_load > 0 else 0,
@@ -396,7 +397,7 @@ def compute_exertion(
 
 
 # ============================================================
-# Overall Score（综合健康分）
+# Overall Score
 # ============================================================
 
 
@@ -407,13 +408,13 @@ def compute_overall(
     avg_stress: Optional[int] = None,
     avg_spo2: Optional[int] = None,
 ) -> Optional[int]:
-    """计算综合健康分 (0-100)。
+    """Compute overall health score (0-100).
 
-    权重：
+    Weights:
     - Recovery: 0.35
     - Sleep Quality: 0.30
     - Exertion: 0.15
-    - Stress (反转): 0.10
+    - Stress (inverted): 0.10
     - SpO2: 0.10
     """
     components: list[tuple[float, float]] = []  # (weight, score)
@@ -425,18 +426,18 @@ def compute_overall(
     if exertion and exertion.zone != "inactive":
         components.append((0.15, exertion.score))
     if avg_stress is not None:
-        # 压力反转：低压力 = 高分
+        # Invert stress: lower stress = higher score
         stress_score = int(_clamp(100 - avg_stress))
         components.append((0.10, stress_score))
     if avg_spo2 is not None:
-        # 血氧归一化：90% -> 0, 100% -> 100
+        # Normalize SpO2: 90% -> 0, 100% -> 100
         spo2_score = int(_clamp((avg_spo2 - 90) / 10 * 100))
         components.append((0.10, spo2_score))
 
     if not components:
         return None
 
-    # 按比例重分配权重
+    # Redistribute weights proportionally
     total_weight = sum(w for w, _ in components)
     if total_weight == 0:
         return None
@@ -446,7 +447,7 @@ def compute_overall(
 
 
 # ============================================================
-# 建议生成
+# Recommendation Generation
 # ============================================================
 
 
@@ -457,57 +458,57 @@ def generate_recommendations(
     avg_stress: Optional[int] = None,
     avg_spo2: Optional[int] = None,
 ) -> list[str]:
-    """根据各项评分生成健康建议。"""
+    """Generate health recommendations based on individual scores."""
     recommendations: list[str] = []
 
-    # 恢复建议
+    # Recovery recommendations
     if recovery:
         if recovery.fatigue_signal:
-            recommendations.append("检测到持续疲劳信号（HRV 偏低 + RHR 偏高），建议安排休息日，保证充足睡眠。")
+            recommendations.append("Persistent fatigue signal detected (low HRV + high RHR). Consider scheduling rest days and ensuring adequate sleep.")
         elif recovery.score < 40:
-            recommendations.append("恢复水平较低，身体可能尚未从之前的训练中恢复，建议降低今日运动强度。")
+            recommendations.append("Recovery level is low. Your body may not have fully recovered from previous training. Consider reducing today's exercise intensity.")
         elif recovery.score >= 75:
-            recommendations.append("恢复状态良好，适合进行中高强度训练。")
+            recommendations.append("Recovery status is good. Suitable for moderate to high intensity training.")
         if recovery.trend == "declining":
-            recommendations.append("HRV 呈下降趋势，注意检查睡眠质量和生活压力。")
+            recommendations.append("HRV shows a declining trend. Check your sleep quality and life stress levels.")
 
-    # 睡眠建议
+    # Sleep recommendations
     if sleep_quality:
         if sleep_quality.score < 60:
-            recommendations.append("睡眠质量不佳，建议关注睡眠习惯：固定作息时间、减少睡前屏幕使用。")
+            recommendations.append("Sleep quality is poor. Consider improving sleep habits: maintain a consistent schedule, reduce screen time before bed.")
         if sleep_quality.deep_sleep_pct is not None and sleep_quality.deep_sleep_pct < 15:
-            recommendations.append("深睡比例偏低，建议睡前避免酒精和咖啡因，保持卧室凉爽。")
+            recommendations.append("Deep sleep ratio is low. Avoid alcohol and caffeine before bed, keep the bedroom cool.")
         if sleep_quality.rem_sleep_pct is not None and sleep_quality.rem_sleep_pct < 18:
-            recommendations.append("REM 睡眠不足，可能影响记忆和情绪调节，建议保持规律作息。")
+            recommendations.append("REM sleep is insufficient, which may affect memory and emotional regulation. Maintain a regular sleep schedule.")
         if sleep_quality.duration_minutes and sleep_quality.duration_minutes < 360:
-            recommendations.append("睡眠时长不足 6 小时，长期睡眠不足会影响健康和运动表现。")
+            recommendations.append("Sleep duration is under 6 hours. Chronic sleep deprivation affects health and athletic performance.")
 
-    # 训练负荷建议
+    # Training load recommendations
     if exertion and exertion.zone != "inactive":
         if exertion.zone == "high_risk":
-            recommendations.append("训练负荷过高，存在过度训练风险！建议立即安排 2-3 天的主动恢复。")
+            recommendations.append("Training load is too high, risk of overtraining! Schedule 2-3 days of active recovery immediately.")
         elif exertion.zone == "overreaching":
-            recommendations.append("训练负荷偏高，建议适当降低训练量，增加恢复时间。")
+            recommendations.append("Training load is on the high side. Consider reducing training volume and increasing recovery time.")
         elif exertion.zone == "detraining":
-            recommendations.append("近期训练量偏低，如果目标是提升体能，建议逐步增加运动量。")
+            recommendations.append("Recent training volume is low. If your goal is to improve fitness, gradually increase exercise volume.")
         elif exertion.zone == "productive":
-            recommendations.append("训练负荷在有效提升区间，保持当前节奏。")
+            recommendations.append("Training load is in the effective improvement zone. Maintain your current pace.")
 
-    # 压力建议
+    # Stress recommendations
     if avg_stress is not None:
         if avg_stress > 60:
-            recommendations.append("压力水平偏高，建议进行放松活动：深呼吸、冥想或轻度散步。")
+            recommendations.append("Stress level is high. Consider relaxation activities: deep breathing, meditation, or a light walk.")
         elif avg_stress > 40:
-            recommendations.append("压力中等，注意适当休息和放松。")
+            recommendations.append("Stress is moderate. Take appropriate breaks and relaxation.")
 
-    # 血氧建议
+    # SpO2 recommendations
     if avg_spo2 is not None:
         if avg_spo2 < 93:
-            recommendations.append("血氧饱和度偏低（<93%），建议关注呼吸健康，必要时就医检查。")
+            recommendations.append("Blood oxygen saturation is low (<93%). Pay attention to respiratory health and seek medical attention if necessary.")
         elif avg_spo2 < 95:
-            recommendations.append("血氧饱和度略低于正常范围，注意是否有打鼾或呼吸不畅的情况。")
+            recommendations.append("Blood oxygen saturation is slightly below normal range. Check for snoring or breathing difficulties.")
 
     if not recommendations:
-        recommendations.append("各项指标正常，保持当前的生活方式。")
+        recommendations.append("All indicators are normal. Maintain your current lifestyle.")
 
     return recommendations
