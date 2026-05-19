@@ -9,76 +9,76 @@ description: >
 
 # Zepp Health Analysis Skill
 
-通过 Zepp/Amazfit API 获取用户的健康数据，进行个性化分析和建议。
+Fetch health data from the Zepp/Amazfit API and provide personalized analysis and recommendations.
 
-## 数据获取
+## Data Fetching
 
-运行以下命令获取结构化健康数据快照：
+Run the following command to get a structured health data snapshot:
 
 ```bash
 python3 {skill_dir}/scripts/health_snapshot.py
 ```
 
-可指定日期：
+Specify a date:
 
 ```bash
 python3 {skill_dir}/scripts/health_snapshot.py --date YYYY-MM-DD
 ```
 
-输出 JSON 包含：当日数据、7 天趋势、运动记录、评分明细。
+Output is JSON containing: today's data, 7-day trends, workout records, and score breakdowns.
 
-## 配置
+## Configuration
 
-需要配置 Zepp API 认证信息，按优先级：
+Configure Zepp API authentication (by priority):
 1. `{skill_dir}/config.json` — `{ "app_token": "...", "user_id": "...", "host": "api-mifit-cn3.zepp.com" }`
-2. 环境变量 `ZEPP_COOKIE` — cookie 字符串
-3. 环境变量 `ZEPP_APP_TOKEN` + `ZEPP_USER_ID`
+2. Environment variable `ZEPP_COOKIE` — cookie string
+3. Environment variables `ZEPP_APP_TOKEN` + `ZEPP_USER_ID`
 
-获取 cookie：登录 app.zepp.com，从浏览器开发者工具复制 Cookie。
+Get cookie: log in to app.zepp.com, copy Cookie from browser developer tools.
 
-## 分析框架
+## Analysis Framework
 
-拿到数据后，参考 `{skill_dir}/references/health_analysis_guide.md` 进行分析。
+After fetching data, reference `{skill_dir}/references/health_analysis_guide.md` for analysis.
 
-核心分析维度：
+Core analysis dimensions:
 
-### 1. 恢复状态
-- HRV 与个人基线对比（趋势比绝对值重要）
-- RHR 与个人基线对比
-- 连续 3 天 HRV↓ + RHR↑ = 疲劳信号
+### 1. Recovery Status
+- HRV vs personal baseline (trends matter more than absolute values)
+- RHR vs personal baseline
+- 3 consecutive days of HRV down + RHR up = fatigue signal
 
-### 2. 睡眠质量
-- 深睡占比 15-20%、REM 占比 20-25% 为正常
-- 醒来次数 <3 次为佳
-- 睡眠效率 >85% 为佳
+### 2. Sleep Quality
+- Deep sleep 15-20%, REM 20-25% is normal
+- Wake count <3 is ideal
+- Sleep efficiency >85% is ideal
 
-### 3. 训练负荷
-- 急慢性比 0.8-1.3 为健康区间
-- >1.5 存在过度训练风险
+### 3. Training Load
+- Acute:chronic ratio 0.8-1.3 is healthy
+- >1.5 indicates overtraining risk
 
-### 4. 身体电量
-- >70 适合训练，<30 需要休息
+### 4. Body Battery
+- >70 suitable for training, <30 needs rest
 
-### 5. 压力与血氧
-- 压力均值 <40 为低压力，>60 需关注
-- 血氧 <93% 需建议就医
+### 5. Stress & SpO2
+- Average stress <40 is low, >60 needs attention
+- SpO2 <93% should recommend medical consultation
 
-## 输出格式
+## Output Format
 
-按以下结构组织分析结果：
+Structure the analysis as follows:
 
-1. **数据概览** — 关键指标摘要
-2. **趋势分析** — 7 天变化趋势和异常
-3. **交叉分析** — 多指标关联判断
-4. **个性化建议** — 具体、可执行的行动建议
-5. **今日行动** — 根据当前状态给出当天建议
+1. **Data Overview** — Key metrics summary
+2. **Trend Analysis** — 7-day changes and anomalies
+3. **Cross-Analysis** — Multi-metric correlation
+4. **Personalized Recommendations** — Specific, actionable advice
+5. **Today's Actions** — Concrete actions based on current state
 
-## 安全边界
+## Safety Boundaries
 
-以下情况必须建议就医，不做诊断：
+Must recommend seeking medical attention (without diagnosing) when:
 - SpO2 < 90%
-- 静息心率异常升高超过基线 20% 以上
-- HRV 持续异常偏低（低于基线 30%+）
-- 用户描述胸痛、呼吸困难等症状
+- Resting heart rate anomaly exceeds 20% above baseline
+- HRV persistently low (30%+ below baseline)
+- User describes chest pain, breathing difficulty, or other symptoms
 
-始终保持在健康建议范围内，不提供医疗诊断。
+Always stay within health advisory scope. Never provide medical diagnoses.

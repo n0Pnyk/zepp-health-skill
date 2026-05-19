@@ -1,115 +1,115 @@
-# 健康数据分析指南
+# Health Data Analysis Guide
 
-本文档为 LLM 提供健康数据分析的参考框架。
+This document provides a reference framework for LLM-driven health data analysis.
 
-## 指标解读
+## Metric Interpretation
 
-### HRV（心率变异性）
+### HRV (Heart Rate Variability)
 
-- **含义**：反映自主神经系统状态，是恢复和压力的核心指标
-- **正常范围**：个体差异大，20-100ms 均可正常
-- **关键**：与个人基线对比，趋势比绝对值重要
-- **高于基线**：恢复良好，副交感神经活跃
-- **低于基线**：压力大、疲劳、疾病前兆、酒精影响等
-- **连续 3 天低于基线 10%+**：需要关注
+- **Meaning**: Reflects autonomic nervous system status; a core indicator of recovery and stress
+- **Normal range**: Highly individual, 20-100ms can all be normal
+- **Key**: Compare against personal baseline; trends matter more than absolute values
+- **Above baseline**: Good recovery, parasympathetic activity dominant
+- **Below baseline**: Stress, fatigue, illness precursor, alcohol effects, etc.
+- **3+ consecutive days below baseline by 10%+**: Needs attention
 
-### 静息心率（RHR）
+### Resting Heart Rate (RHR)
 
-- **含义**：安静状态下的心率，反映心血管效率
-- **正常范围**：40-100 bpm，运动员可能更低
-- **低于基线**：心血管效率好，恢复好
-- **高于基线**：疲劳、压力、疾病、过度训练
-- **连续 3 天高于基线 5bpm+**：需关注
+- **Meaning**: Heart rate at rest, reflects cardiovascular efficiency
+- **Normal range**: 40-100 bpm, athletes may be lower
+- **Below baseline**: Good cardiovascular efficiency, good recovery
+- **Above baseline**: Fatigue, stress, illness, overtraining
+- **3+ consecutive days above baseline by 5bpm+**: Needs attention
 
-### 睡眠
+### Sleep
 
-| 指标 | 正常范围 | 过低含义 | 过高含义 |
-|------|----------|----------|----------|
-| 总时长 | 7-9 小时 | 睡眠不足 | 可能嗜睡 |
-| 深睡占比 | 15-20% | 恢复不足 | — |
-| REM 占比 | 20-25% | 记忆/情绪影响 | — |
-| 醒来次数 | <3 次 | — | 睡眠中断 |
-| 睡眠效率 | >85% | 入睡困难 | — |
+| Metric | Normal Range | Too Low | Too High |
+|--------|-------------|---------|----------|
+| Total duration | 7-9 hours | Sleep deprivation | Possible hypersomnia |
+| Deep sleep % | 15-20% | Insufficient recovery | — |
+| REM % | 20-25% | Memory/mood impact | — |
+| Wake count | <3 | — | Sleep fragmentation |
+| Sleep efficiency | >85% | Difficulty falling asleep | — |
 
-### 身体电量
+### Body Battery
 
-- 0-100 量表
-- >70：适合中高强度活动
-- 30-70：适中，轻度活动
-- <30：需要休息和恢复
+- 0-100 scale
+- >70: Suitable for moderate-to-high intensity activity
+- 30-70: Moderate, light activity
+- <30: Needs rest and recovery
 
-### 压力
+### Stress
 
-- 0-100 量表
-- <40：低压力，放松状态为主
-- 40-60：中等压力
-- >60：高压力，需关注放松
+- 0-100 scale
+- <40: Low stress, predominantly relaxed
+- 40-60: Moderate stress
+- >60: High stress, needs attention to relaxation
 
-### 血氧（SpO2）
+### SpO2 (Blood Oxygen)
 
-- 正常：95-100%
-- 93-95%：轻度偏低，关注呼吸
-- <93%：建议就医
-- ODI（氧减指数）：>5 次/小时需关注
+- Normal: 95-100%
+- 93-95%: Slightly low, monitor breathing
+- <93%: Recommend medical consultation
+- ODI (Oxygen Desaturation Index): >5 events/hour needs attention
 
-### 训练负荷
+### Training Load
 
-| 区间 | 急慢性比 | 含义 |
-|------|----------|------|
-| detraining | <0.8 | 训练不足 |
-| maintaining | 0.8-1.0 | 维持状态 |
-| productive | 1.0-1.3 | 有效提升 |
-| overreaching | 1.3-1.5 | 负荷偏高 |
-| high_risk | >1.5 | 过度训练风险 |
+| Zone | Acute:Chronic Ratio | Meaning |
+|------|---------------------|---------|
+| detraining | <0.8 | Under-training |
+| maintaining | 0.8-1.0 | Maintaining fitness |
+| productive | 1.0-1.3 | Effective progression |
+| overreaching | 1.3-1.5 | High load |
+| high_risk | >1.5 | Overtraining risk |
 
-## 交叉分析模式
+## Cross-Analysis Patterns
 
-### 过度训练信号
-- HRV 持续↓ + RHR 持续↑ + 睡眠质量↓ + 训练负荷↑
-- 行动：立即安排 2-3 天主动恢复
+### Overtraining Signal
+- HRV persistently down + RHR persistently up + sleep quality down + training load up
+- Action: Schedule 2-3 days of active recovery immediately
 
-### 疾病前兆
-- HRV 突然大幅下降（>20%）+ RHR 升高 + 身体电量低
-- 行动：注意休息，监测症状
+### Illness Precursor
+- HRV sudden large drop (>20%) + RHR elevated + body battery low
+- Action: Rest and monitor symptoms
 
-### 酒精影响
-- 深睡比例↓ + REM↓ + HRV↓ + RHR↑（饮酒后次日）
-- 行动：减少饮酒，尤其睡前
+### Alcohol Impact
+- Deep sleep proportion down + REM down + HRV down + RHR up (day after drinking)
+- Action: Reduce alcohol intake, especially before sleep
 
-### 时差/作息紊乱
-- 睡眠效率↓ + 入睡时间↑ + HRV 波动大
-- 行动：固定作息时间
+### Jet Lag / Schedule Disruption
+- Sleep efficiency down + sleep onset latency up + HRV highly variable
+- Action: Establish consistent sleep/wake schedule
 
-### 恢复良好
-- HRV 高于基线 + RHR 低于基线 + 身体电量高 + 睡眠质量好
-- 行动：适合高强度训练
+### Good Recovery
+- HRV above baseline + RHR below baseline + body battery high + sleep quality good
+- Action: Suitable for high-intensity training
 
-## 建议生成原则
+## Recommendation Principles
 
-1. **具体可执行**：「今晚 10 点前入睡」优于「注意睡眠」
-2. **分级严重程度**：紧急（就医）、重要（立即调整）、一般（日常建议）
-3. **不重复**：同一问题只提一次建议
-4. **结合趋势**：单日异常可能是偶然，连续异常需要关注
-5. **个性化**：根据用户运动习惯和目标调整建议
-6. **正向鼓励**：状态好时给予正面反馈
+1. **Specific and actionable**: "Go to bed before 10pm tonight" > "Get more sleep"
+2. **Severity grading**: Urgent (seek medical attention), Important (adjust immediately), General (daily advice)
+3. **No repetition**: Mention each issue only once
+4. **Consider trends**: A single-day anomaly may be coincidence; consecutive anomalies need attention
+5. **Personalize**: Adjust recommendations based on user's exercise habits and goals
+6. **Positive reinforcement**: Give positive feedback when metrics are good
 
-## 输出结构模板
+## Output Structure Template
 
 ```
-## 📊 今日数据概览
-[关键指标摘要表格]
+## Data Overview
+[Key metrics summary table]
 
-## 📈 7 天趋势
-[趋势变化和异常标注]
+## 7-Day Trends
+[Trend changes and anomaly markers]
 
-## 🔍 综合分析
-[多指标交叉分析]
+## Cross-Analysis
+[Multi-metric correlation analysis]
 
-## 💡 个性化建议
-1. [最重要的建议]
-2. [次要建议]
+## Personalized Recommendations
+1. [Most important recommendation]
+2. [Secondary recommendation]
 3. ...
 
-## ✅ 今日行动
-[根据当前状态的具体行动建议]
+## Today's Actions
+[Concrete action items based on current state]
 ```
