@@ -6,6 +6,8 @@
 
 ## English
 
+![Sample Report](assets/demo-report.png)
+
 LLM-driven analysis of Zepp/Amazfit health data with personalized recommendations.
 
 Works with [OpenClaw](https://github.com/anthropics/openclaw) or hermes-agent.
@@ -123,6 +125,8 @@ This project is for **personal use, academic research, and educational purposes 
 ---
 
 ## 中文
+
+![示例报告](assets/demo-report.png)
 
 LLM 驱动的 Zepp/Amazfit 健康数据分析，提供个性化建议。
 
