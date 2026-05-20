@@ -38,7 +38,7 @@ Get your credentials:
 
 1. Open the Zepp privacy data page and log in:
    ```
-   https://user.huami.com/privacy2/index.html?loginPlatform=web&platform_app=com.xiaomi.hm.health
+   https://user.huami.com/privacy2/#/confirmExportData
    ```
 2. Open browser Developer Tools (F12) → Network tab
 3. Refresh the page (or click any page action)
@@ -149,7 +149,7 @@ cp config.example.json config.json
 
 1. 打开 Zepp 隐私数据页面并登录：
    ```
-   https://user.huami.com/privacy2/index.html?loginPlatform=web&platform_app=com.xiaomi.hm.health
+   https://user.huami.com/privacy2/#/confirmExportData
    ```
 2. 打开浏览器开发者工具（F12）→ Network 标签
 3. 刷新页面（或点击页面任意操作）
