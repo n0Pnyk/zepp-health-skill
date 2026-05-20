@@ -332,6 +332,8 @@ class RecoveryScore(BaseModel):
     score: int = Field(description="Recovery score (0-100)")
     hrv_component: Optional[int] = Field(default=None, description="HRV component score")
     rhr_component: Optional[int] = Field(default=None, description="RHR component score")
+    hrv_avg_7d: Optional[int] = Field(default=None, description="7-day HRV average (ms)")
+    rhr_avg_7d: Optional[int] = Field(default=None, description="7-day RHR average (bpm)")
     trend: str = Field(default="stable", description="Trend: improving/declining/stable")
     fatigue_signal: bool = Field(default=False, description="Whether fatigue signal is detected")
     details: str = ""
@@ -345,6 +347,8 @@ class SleepQualityScore(BaseModel):
     rem_sleep_pct: Optional[float] = Field(default=None, description="REM sleep percentage (%)")
     efficiency_pct: Optional[float] = Field(default=None, description="Sleep efficiency (%)")
     duration_minutes: Optional[int] = None
+    onset_latency_minutes: Optional[int] = Field(default=None, description="Sleep onset latency (min)")
+    consistency_score: Optional[int] = Field(default=None, description="Sleep schedule consistency (0-100)")
     details: str = ""
 
 
@@ -352,9 +356,11 @@ class ExertionScore(BaseModel):
     """Training load score."""
 
     score: int = Field(description="Training load score (0-100)")
-    acute_load_7d: float = Field(default=0, description="7-day acute load")
-    chronic_load_28d: float = Field(default=0, description="28-day chronic load")
-    ratio: float = Field(default=0, description="Acute/chronic ratio")
+    max_hr_28d: Optional[int] = Field(default=None, description="Max HR from 28-day workouts (bpm)")
+    hr_threshold: Optional[int] = Field(default=None, description="Personalized HR threshold (bpm)")
+    minutes_above_threshold: float = Field(default=0, description="Minutes above threshold in 7 days")
+    target_zone_low: Optional[int] = Field(default=None, description="Target exertion zone lower bound")
+    target_zone_high: Optional[int] = Field(default=None, description="Target exertion zone upper bound")
     zone: str = Field(default="inactive", description="Load zone")
     details: str = ""
 
