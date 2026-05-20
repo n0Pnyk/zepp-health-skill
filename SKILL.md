@@ -25,40 +25,16 @@ python3 {skill_dir}/scripts/health_snapshot.py
 python3 {skill_dir}/scripts/health_snapshot.py --date YYYY-MM-DD
 ```
 
-检查依赖是否完整：
-
-```bash
-python3 {skill_dir}/scripts/health_snapshot.py --check
-```
-
-输出 JSON 包含：当日数据、7 天趋势、运动记录、评分明细、`_warnings`（API 错误）、`_meta`（各接口状态）。
+输出 JSON 包含：当日数据、7 天趋势、运动记录、评分明细。
 
 ## 配置
 
 需要配置 Zepp API 认证信息，按优先级：
-1. `{skill_dir}/config.json` — 本地 skill 配置
-2. 环境变量 `ZEPP_COOKIE` — cookie 字符串（自动解析 apptoken/userid）
+1. `{skill_dir}/config.json` — `{ "app_token": "...", "user_id": "...", "host": "api-mifit-cn3.zepp.com" }`
+2. 环境变量 `ZEPP_COOKIE` — cookie 字符串
 3. 环境变量 `ZEPP_APP_TOKEN` + `ZEPP_USER_ID`
-4. CLI 项目 fallback — `/root/projects/zepp-health/config.json`（自动查找）
 
-> 优先用 skill 目录的 config.json，没有时自动读 CLI 项目的配置。
-
-### 获取认证信息
-
-方式 A（推荐）：直接粘贴 Cookie
-
-1. 登录 https://user.huami.com/privacy2/index.html
-2. F12 → Application → Cookies，复制整个 Cookie 字符串
-3. 粘贴给 Hermes，会自动解析 apptoken 和 userid 并更新 config.json
-
-方式 B：手动提取
-
-1. 登录隐私数据页面
-2. F12 → Network，刷新页面
-3. 找到发往 `api-mifit*.zepp.com` 的请求
-4. 从请求头复制 `apptoken`，从参数复制 `userid`
-
-> Token 约 30 天过期，手机 App 登录后服务器 token 会失效，需重新获取。
+获取 cookie：登录 app.zepp.com，从浏览器开发者工具复制 Cookie。
 
 ## 分析框架
 
@@ -76,9 +52,13 @@ python3 {skill_dir}/scripts/health_snapshot.py --check
 - 醒来次数 <3 次为佳
 - 睡眠效率 >85% 为佳
 
-### 3. 训练负荷
-- 急慢性比 0.8-1.3 为健康区间
-- >1.5 存在过度训练风险
+### 3. 训练负荷（心率储备法）
+- inactive: 无运动数据
+- detraining: <75 min/week，训练不足
+- low: 75-150 min/week，偏低
+- productive: 150-300 min/week，WHO 推荐范围
+- overreaching: 300-450 min/week，负荷偏高
+- high_risk: >450 min/week，过度训练风险
 
 ### 4. 身体电量
 - >70 适合训练，<30 需要休息
@@ -106,39 +86,3 @@ python3 {skill_dir}/scripts/health_snapshot.py --check
 - 用户描述胸痛、呼吸困难等症状
 
 始终保持在健康建议范围内，不提供医疗诊断。
-
-## 注意事项
-
-1. **Token 会过期** — Zepp 限制单会话，手机 App 登录后服务器 token 立即失效。数据返回 null 或 401 时，重新从隐私数据页面提取 token 并更新 config.json。
-
-2. **间歇性 401** — 即使 config 正确，Zepp API 有时仍返回 401。直接重试即可。
-
-3. **指标缺失** — snapshot JSON 的 `_meta` 字段记录每个 API 的请求状态（ok/empty/error），可据此判断是数据未同步还是 API 故障。
-
-4. **建议来源区别** — 此 skill 用 LLM 分析（个性化），CLI 的 `zepp-health briefing` 用固定规则（通用）。
-
-## ⚠️ 安装后首次配置
-
-skill 安装后需要从 CLI 项目复制 config.json（git 不含敏感配置）：
-
-```bash
-cp /root/projects/zepp-health/config.json ~/.hermes/skills/smart-home/zepp-health/config.json
-chmod 600 ~/.hermes/skills/smart-home/zepp-health/config.json
-```
-
-如果运行报 `invalid token` 或 `401`，先检查 config.json 是否存在且包含有效的 app_token。
-
-## 更新方法
-
-skill 目录是 git 仓库，直接 pull：
-
-```bash
-cd ~/.hermes/skills/smart-home/zepp-health
-git pull
-```
-
-`config.json` 在 .gitignore 中不会被覆盖。`SKILL.md` 有本地修改时 git 会提示冲突，保留本地版本即可。
-
-## 上游仓库
-
-GitHub: https://github.com/n0Pnyk/zepp-health-skill
