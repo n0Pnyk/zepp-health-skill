@@ -86,3 +86,7 @@ python3 {skill_dir}/scripts/health_snapshot.py --date YYYY-MM-DD
 - 用户描述胸痛、呼吸困难等症状
 
 始终保持在健康建议范围内，不提供医疗诊断。
+
+## 免责声明
+
+本工具仅供个人健康数据参考，不构成医疗建议。使用逆向工程 API 接口，与 Zepp Health 无关联。用户需自行确保符合平台服务条款。

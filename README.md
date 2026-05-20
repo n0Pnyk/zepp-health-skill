@@ -105,9 +105,16 @@ The LLM will recommend seeking medical attention (without diagnosing) when:
 - Resting heart rate anomaly exceeds 20% above baseline
 - HRV persistently low (30%+ below baseline)
 
+### Intended Use
+
+This project is for **personal use, academic research, and educational purposes only**. It accesses your own Zepp/Amazfit health data using your own credentials. Not intended for commercial use or mass data collection.
+
 ### Disclaimer
 
-This tool is for informational purposes only and does not constitute medical advice. Consult a healthcare professional for any health concerns.
+- **Not medical advice.** All outputs are for informational reference only. Consult a healthcare professional for any health concerns.
+- **Unofficial tool.** This project uses reverse-engineered API endpoints and is not affiliated with, endorsed by, or connected to Zepp Health (Huami/Amazfit).
+- **User responsibility.** Users are responsible for compliance with the Zepp platform Terms of Service in their jurisdiction.
+- **No warranty.** Provided "as is" without any warranty. The authors are not liable for any damages arising from use of this software.
 
 ### License
 
@@ -216,9 +223,16 @@ python3 scripts/health_snapshot.py --date 2026-05-18  # 指定日期
 - 静息心率异常升高超过基线 20%
 - HRV 持续异常偏低（低于基线 30%+）
 
+### 使用范围
+
+本项目仅供**个人使用、学术研究和教育用途**。使用用户自己的凭证访问自己的 Zepp/Amazfit 健康数据，不用于商业用途或大规模数据采集。
+
 ### 免责声明
 
-本工具仅供健康数据参考，不构成医疗建议。如有健康问题请咨询专业医生。
+- **非医疗建议。** 所有输出仅供参考，不构成医疗建议。如有健康问题请咨询专业医生。
+- **非官方工具。** 本项目使用逆向工程 API 接口，与 Zepp Health（华米/Amazfit）无关联、无授权、无合作关系。
+- **用户责任。** 用户需自行确保符合所在地区 Zepp 平台服务条款。
+- **无担保。** 按"现状"提供，不作任何担保。作者不对使用本软件造成的任何损害承担责任。
 
 ### 许可证
 
