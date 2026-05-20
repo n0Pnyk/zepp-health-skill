@@ -262,16 +262,18 @@ def compute_recovery(
     # Trend computation
     trend = _compute_trend(hrv_floats) if len(hrv_floats) >= 3 else "stable"
 
-    # Generate description
+    # Generate description (use same values as score calculation)
     details_parts = []
-    if today_hrv and hrv_mean > 0:
-        diff_pct = (today_hrv - hrv_mean) / hrv_mean * 100
+    if compare_hrv and hrv_mean > 0:
+        diff_pct = (compare_hrv - hrv_mean) / hrv_mean * 100
         direction = "above" if diff_pct > 0 else "below"
-        details_parts.append(f"HRV {today_hrv}ms ({direction} baseline by {abs(diff_pct):.0f}%)")
-    if today_rhr and rhr_mean > 0:
-        diff = today_rhr - rhr_mean
+        label = f"HRV 7d avg {int(compare_hrv)}ms" if hrv_avg_7d else f"HRV {int(compare_hrv)}ms"
+        details_parts.append(f"{label} ({direction} baseline by {abs(diff_pct):.0f}%)")
+    if compare_rhr and rhr_mean > 0:
+        diff = compare_rhr - rhr_mean
         direction = "above" if diff > 0 else "below"
-        details_parts.append(f"RHR {today_rhr}bpm ({direction} baseline by {abs(diff):.0f}bpm)")
+        label = f"RHR 7d avg {int(compare_rhr)}bpm" if rhr_avg_7d else f"RHR {int(compare_rhr)}bpm"
+        details_parts.append(f"{label} ({direction} baseline by {abs(diff):.0f}bpm)")
     if fatigue:
         details_parts.append("Fatigue signal detected: HRV consistently low and RHR consistently high")
 
