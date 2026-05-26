@@ -171,7 +171,7 @@ WORKOUT_TYPES = {
     6: "elliptical",
     7: "climbing",
     8: "trail_running",
-    9: "skiing",
+    9: "outdoor_cycling",
     10: "snowboarding",
     16: "freestyle",
     17: "swimming",
