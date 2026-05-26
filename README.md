@@ -38,15 +38,11 @@ Edit `config.json` with your Zepp API credentials:
 
 Get your credentials:
 
-1. Open the Zepp privacy data page and log in:
-   ```
-   https://user.huami.com/privacy2/#/confirmExportData
-   ```
-2. Open browser Developer Tools (F12) → Network tab
-3. Refresh the page (or click any page action)
-4. Find a request to `api-mifit*.zepp.com`
-5. Copy `apptoken` from request headers
-6. Copy `userid` from the request URL or query parameters
+1. Open https://user.huami.com/privacy2/index.html and log in
+2. Open browser Developer Tools (F12) → **Application** tab → **Cookies** → `user.huami.com`
+3. Copy the `apptoken` and `userid` values from the cookies
+
+> No packet capture, no proxy, no root, no phone needed. Just a desktop browser.
 
 > Token expires after ~30 days. When data returns null, re-extract a new token.
 
@@ -158,15 +154,11 @@ cp config.example.json config.json
 
 获取认证信息：
 
-1. 打开 Zepp 隐私数据页面并登录：
-   ```
-   https://user.huami.com/privacy2/#/confirmExportData
-   ```
-2. 打开浏览器开发者工具（F12）→ Network 标签
-3. 刷新页面（或点击页面任意操作）
-4. 找到发往 `api-mifit*.zepp.com` 的请求
-5. 从请求头复制 `apptoken`
-6. 从请求 URL 或参数中复制 `userid`
+1. 打开 https://user.huami.com/privacy2/index.html 并登录
+2. 打开浏览器开发者工具（F12）→ **Application** 标签 → **Cookies** → `user.huami.com`
+3. 从 Cookie 中复制 `apptoken` 和 `userid` 的值
+
+> 无需抓包、无需代理、无需 root、无需手机。一个桌面浏览器就够了。
 
 > Token 约 30 天过期。数据返回 null 时，重新提取 token 即可。
 
