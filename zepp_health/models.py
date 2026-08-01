@@ -162,17 +162,21 @@ class HeartRateZone(BaseModel):
 
 
 # Workout type code mapping
+# Source: H3llK33p3r/zepp-fit-extractor ActivityType enum (verified against
+# user's own workout data: type 6 records are slow pace + high step count =
+# walking, NOT elliptical; type 9 has ~0 steps = cycling)
 WORKOUT_TYPES = {
     1: "outdoor_running",
     2: "walking",
     3: "cycling",
     4: "treadmill",
     5: "indoor_cycling",
-    6: "elliptical",
+    6: "walking",
     7: "climbing",
-    8: "trail_running",
+    8: "treadmill",
     9: "outdoor_cycling",
     10: "snowboarding",
+    14: "indoor_swimming",
     16: "freestyle",
     17: "swimming",
     18: "indoor_swimming",
@@ -182,6 +186,7 @@ WORKOUT_TYPES = {
     22: "indoor_rowing",
     64: "strength_training",
     128: "hiit",
+    192: "outdoor_running",
     223: "other",
 }
 
