@@ -86,6 +86,30 @@
 - 所有运动类型都从 /v1/sport/run/history.json 返回，其他 sport 段（/walking /ride 等）404
 - detail 端点 /v1/sport/run/detail.json 需要 trackid + source 双参数（只传 trackid 会 400）
 
+### 白天详细心率（2026-08-01 重大发现）
+
+**之前"无白天心率"的说法是错的**——根源是只用了 `query_type=summary`。
+
+band_data 用 `query_type=detail` 时额外返回：
+- `data_hr`: base64 → 1440 字节/天，**每字节 = 每分钟心率**（254/255 = 无效）
+- `data`: 活动阶段字节流（11520 字节 = 8 字节/分钟）
+
+验证（7-31）：1421/1440 有效样本（99%），min=49 max=115 avg=71，
+睡眠时段 55-65、白天 70-87、午间峰值 87，符合生理规律。
+
+client 方法：`get_minute_heart_rate(start, end)` → list[HeartRateData]
+快照字段：`today.heart_rate_daytime`（min/max/avg/samples）、`heart_rate_daily_7d`
+
+**注意**：`/users/{uid}/heartRate` 端点仍为空（失效），detail 模式是白天心率的唯一来源。
+
+### 其他端点探测结论（2026-08-01 round 3）
+
+- `huami.health.getUserInfo.json`：有数据（age=0 未设置、alarm_clock 闹钟配置）——健康价值低
+- `/v1/user/manualData.json?type=sleep`：有 2019-11-30 手动睡眠记录；weight/height/heart/血压全空
+- v2 events 的 sleep/SleepInfo/blood_oxygen/temperature/oxygen/SleepBreath/PAI/stress/workout：全空（这些数据走 v1 events 或 band_data）
+- v2 events readiness 可用（3 条），但 v1 readiness 更完整
+- 其他 sport stats（FITNESS_AGE/PAI 等）400
+
 ## 验证脚本
 
 ```bash
