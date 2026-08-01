@@ -27,6 +27,18 @@ class StepData(BaseModel):
     walking_minutes: int = Field(default=0, description="Walking duration in minutes")
     running_calories: int = Field(default=0, description="Running calories")
     running_steps: int = Field(default=0, description="Running steps")
+    goal: int = Field(default=0, description="Daily step goal")
+    step_stage_summary: list[StepStageSummary] = Field(default_factory=list, description="Per-minute step details")
+
+
+class StepStageSummary(BaseModel):
+    """Per-minute step stage summary (stepStageSummary from band_data)."""
+
+    time: int = Field(default=0, description="Minute offset from day start")
+    count: int = Field(default=0, description="Number of segments")
+    distance_meters: int = Field(default=0, description="Distance in meters")
+    calories: int = Field(default=0, description="Calories")
+    steps: int = Field(default=0, description="Steps in this minute")
 
 
 class SleepPhase(BaseModel):
@@ -58,6 +70,10 @@ class SleepData(BaseModel):
     out_of_bed_time: Optional[int] = Field(default=None, description="Time out of bed in minutes")
     interruption_score: Optional[int] = Field(default=None, description="Interruption score")
     phases: list[SleepPhase] = Field(default_factory=list)
+    has_nap: bool = Field(default=False, description="supNap: whether a nap was recorded")
+    has_nap_rem: bool = Field(default=False, description="supRem: whether nap REM was recorded")
+    sleep_source: Optional[str] = Field(default=None, description="sleepSource device id")
+    odd_stages: list[SleepPhase] = Field(default_factory=list, description="odd_stage abnormal sleep phases")
 
 
 class HeartRateData(BaseModel):

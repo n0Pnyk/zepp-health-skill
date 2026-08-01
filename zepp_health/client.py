@@ -34,6 +34,7 @@ from zepp_health.models import (
     SpO2Reading,
     SportLoadRecord,
     StepData,
+    StepStageSummary,
     StressData,
     StressReading,
     VO2MaxRecord,
@@ -302,6 +303,22 @@ class ZeppClient:
             stp = summary.get("stp", {})
             if isinstance(stp, dict):
                 base_date = datetime.strptime(date_str, "%Y-%m-%d") if date_str else datetime.now()
+                # Parse per-minute step stage summary
+                stage_summaries = []
+                raw_stages = stp.get("stepStageSummary", [])
+                if isinstance(raw_stages, list):
+                    for s in raw_stages:
+                        if isinstance(s, dict):
+                            try:
+                                stage_summaries.append(StepStageSummary(
+                                    time=int(s.get("time", 0)),
+                                    count=int(s.get("count", 0)),
+                                    distance_meters=int(s.get("dis", 0)),
+                                    calories=int(s.get("cal", 0)),
+                                    steps=int(s.get("step", 0)),
+                                ))
+                            except (ValueError, TypeError):
+                                continue
                 return StepData(
                     timestamp=base_date,
                     steps=stp.get("ttl", 0),
@@ -311,6 +328,8 @@ class ZeppClient:
                     walking_minutes=stp.get("wk", 0),
                     running_calories=stp.get("runCal", 0),
                     running_steps=stp.get("rn", 0),
+                    goal=summary.get("goal", 0),
+                    step_stage_summary=stage_summaries,
                 )
         except Exception:
             pass
@@ -360,6 +379,24 @@ class ZeppClient:
                     duration_minutes=phase_end - phase_start,
                 ))
 
+            # Parse odd stages (abnormal sleep phases, e.g. mode 7 = awake)
+            odd_stages = []
+            for stage in slp.get("odd_stage", []):
+                phase_start = stage.get("start", 0)
+                phase_end = stage.get("stop", phase_start)
+                mode = stage.get("mode", 4)
+                phase_start_dt = base_date + timedelta(minutes=phase_start)
+                phase_end_dt = base_date + timedelta(minutes=phase_end)
+                phase_type = {
+                    4: "light", 5: "deep", 8: "rem", 11: "rem",
+                }.get(mode, "awake")
+                odd_stages.append(SleepPhase(
+                    start=phase_start_dt,
+                    end=phase_end_dt,
+                    phase_type=phase_type,
+                    duration_minutes=phase_end - phase_start,
+                ))
+
             return SleepData(
                 date=date_str,
                 start_time=start_time,
@@ -377,6 +414,10 @@ class ZeppClient:
                 out_of_bed_time=slp.get("obt") or None,
                 interruption_score=slp.get("is") or None,
                 phases=phases,
+                has_nap=bool(slp.get("supNap", False)),
+                has_nap_rem=bool(slp.get("supRem", False)),
+                sleep_source=str(slp.get("sleepSource", "")) or None,
+                odd_stages=odd_stages,
             )
         except Exception:
             return None

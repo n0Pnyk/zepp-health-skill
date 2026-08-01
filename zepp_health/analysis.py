@@ -472,14 +472,24 @@ def generate_snapshot(
     if today_activity:
         if today_activity.steps:
             raw_metrics["steps"] = today_activity.steps.steps
+            raw_metrics["step_goal"] = today_activity.steps.goal
             raw_metrics["distance_meters"] = today_activity.steps.distance_meters
             raw_metrics["calories"] = today_activity.steps.calories
+            if today_activity.steps.step_stage_summary:
+                raw_metrics["step_stage_summary"] = [
+                    {"time_min": s.time, "steps": s.steps,
+                     "distance_m": s.distance_meters, "cal": s.calories}
+                    for s in today_activity.steps.step_stage_summary
+                ]
         if today_activity.sleep:
             raw_metrics["sleep_minutes"] = today_activity.sleep.total_minutes
             raw_metrics["deep_sleep_minutes"] = today_activity.sleep.deep_sleep_minutes
             raw_metrics["light_sleep_minutes"] = today_activity.sleep.light_sleep_minutes
             raw_metrics["rem_sleep_minutes"] = today_activity.sleep.rem_sleep_minutes
             raw_metrics["resting_heart_rate"] = today_activity.sleep.resting_heart_rate
+            raw_metrics["has_nap"] = today_activity.sleep.has_nap
+            raw_metrics["has_nap_rem"] = today_activity.sleep.has_nap_rem
+            raw_metrics["odd_stage_count"] = len(today_activity.sleep.odd_stages)
     if today_hrv:
         raw_metrics["sleep_hrv"] = today_hrv
     if today_readiness and today_readiness.hrv_baseline:
@@ -495,8 +505,10 @@ def generate_snapshot(
 
     snapshot: dict[str, Any] = {
         "date": target_date.isoformat(),
+        "step_stage_summary": raw_metrics.get("step_stage_summary", []),
         "today": {
             "steps": raw_metrics.get("steps"),
+            "step_goal": raw_metrics.get("step_goal"),
             "distance_meters": raw_metrics.get("distance_meters"),
             "calories": raw_metrics.get("calories"),
             "sleep": {
@@ -507,6 +519,9 @@ def generate_snapshot(
                 "wake_count": None,
                 "score": None,
                 "resting_hr": raw_metrics.get("resting_heart_rate"),
+                "has_nap": raw_metrics.get("has_nap"),
+                "has_nap_rem": raw_metrics.get("has_nap_rem"),
+                "odd_stage_count": raw_metrics.get("odd_stage_count"),
             },
             "heart_rate": {
                 "sleep_hrv": raw_metrics.get("sleep_hrv"),
