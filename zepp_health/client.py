@@ -1017,13 +1017,18 @@ class ZeppClient:
         start_ts: int,
         end_ts: int,
         *,
-        hrv_type: str = "sdnn",
+        hrv_type: str = "rmssd",
     ) -> list[HRVReading]:
         """Get HRV data.
 
-        hrv_type: "sdnn" or "rmssd"
+        hrv_type: "rmssd" (verified working) or "sdnn" (returns empty on
+        this account — device only records RMSSD).
+        The v2 events endpoint returns value={"samples": [{"s": offset_ms,
+        "u": uniq, "hrv": ms}, ...]} — one sample every few minutes.
+        One reading per event (day) is emitted using the average of valid samples.
         """
-        event_type = "hrv_sdnn" if hrv_type == "sdnn" else "HRVRMSSD"
+        # Only HRVRMSSD is served; hrv_sdnn variants return empty items
+        event_type = "HRVRMSSD" if hrv_type == "rmssd" else "hrv_sdnn"
         items = self._get_v2_events(
             event_type, "real_data", start_ts, end_ts,
         )
@@ -1031,11 +1036,24 @@ class ZeppClient:
         for item in items:
             ts = self._normalize_timestamp(item.get("timestamp", 0))
             value = item.get("value", 0)
-            if not ts or not value:
+            if not ts:
                 continue
-            # value may be a dict or a number
+            # value is a dict with samples[]; each sample has hrv field
             if isinstance(value, dict):
-                # Try extracting from common fields
+                samples = value.get("samples", [])
+                vals = []
+                for s in samples:
+                    if isinstance(s, dict):
+                        v = s.get("hrv") or s.get("value") or s.get("total", 0)
+                        if v:
+                            vals.append(float(v))
+                if vals:
+                    readings.append(HRVReading(
+                        timestamp=datetime.fromtimestamp(ts),
+                        hrv_value=int(round(sum(vals) / len(vals))),
+                        reading_type=hrv_type,
+                    ))
+                    continue
                 v = value.get("value") or value.get("hrv") or value.get("total", 0)
             else:
                 v = value

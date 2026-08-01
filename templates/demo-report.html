@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Zepp Health Report Demo</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #1a1b26;
+    color: #c0caf5;
+    font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+    font-size: 14px;
+    line-height: 1.6;
+    padding: 40px;
+    display: flex;
+    justify-content: center;
+  }
+  .report { max-width: 680px; width: 100%; }
+  .status-summary { font-size: 16px; margin-bottom: 8px; }
+  .separator { border: none; border-top: 2px solid #414868; margin: 24px 0; }
+  .dashboard-header { color: #7aa2f7; font-weight: bold; }
+  .dashboard-sub { color: #565f89; }
+  .metric-row { display: flex; gap: 12px; align-items: baseline; }
+  .metric-name { color: #a9b1d6; min-width: 56px; }
+  .metric-value { color: #c0caf5; min-width: 72px; text-align: right; }
+  .metric-trend { color: #565f89; min-width: 48px; }
+  .dot-green { color: #9ece6a; }
+  .dot-yellow { color: #e0af68; }
+  .dot-red { color: #f7768e; }
+  .dot-white { color: #565f89; }
+  .section-title { color: #7aa2f7; font-weight: bold; margin-bottom: 8px; }
+  .comparison-table { margin-bottom: 24px; }
+  .comparison-table .row { display: flex; gap: 0; }
+  .comparison-table .label { color: #a9b1d6; min-width: 60px; }
+  .comparison-table .col { min-width: 80px; text-align: right; }
+  .comparison-table .col-header { color: #565f89; font-size: 12px; }
+  .trend-good { color: #9ece6a; }
+  .trend-bad { color: #f7768e; }
+  .heatmap-title { color: #a9b1d6; margin-bottom: 4px; }
+  .heatmap-values { color: #c0caf5; letter-spacing: 2px; }
+  .heatmap-baseline { letter-spacing: 2px; }
+  .heatmap-delta { color: #565f89; letter-spacing: 2px; }
+  .analysis p { margin-bottom: 16px; color: #a9b1d6; }
+  .rec-important { color: #f7768e; }
+  .rec-suggestion { color: #e0af68; }
+  .rec-good { color: #9ece6a; }
+  .checklist-header { color: #7aa2f7; font-weight: bold; }
+  .checklist-item { color: #a9b1d6; }
+</style>
+</head>
+<body>
+<div class="report">
+  <div class="status-summary">今天的健康状态：<span class="dot-yellow">🟡</span> 一般 — 昨晚睡眠不足，建议降低训练强度</div>
+  <hr class="separator">
+  <div><span class="dashboard-header">─── 指标概览 ─────────────────────</span></div>
+  <div class="metric-row"><span class="metric-name">HRV</span><span class="metric-value">45ms</span><span class="metric-trend">↓8%</span><span class="dot-yellow">🟡</span></div>
+  <div class="metric-row"><span class="metric-name">RHR</span><span class="metric-value">58bpm</span><span class="metric-trend">↑3%</span><span class="dot-yellow">🟡</span></div>
+  <div class="metric-row"><span class="metric-name">睡眠</span><span class="metric-value">6h45m</span><span class="metric-trend">↓18%</span><span class="dot-yellow">🟡</span></div>
+  <div class="metric-row"><span class="metric-name">深睡</span><span class="metric-value">14% 57min</span><span class="metric-trend"></span><span class="dot-yellow">🟡</span></div>
+  <div class="metric-row"><span class="metric-name">电量</span><span class="metric-value">58</span><span class="metric-trend"></span><span class="dot-yellow">🟡</span></div>
+  <div class="metric-row"><span class="metric-name">压力</span><span class="metric-value">52</span><span class="metric-trend"></span><span class="dot-yellow">🟡</span></div>
+  <div class="metric-row"><span class="metric-name">血氧</span><span class="metric-value">96%</span><span class="metric-trend"></span><span class="dot-green">🟢</span></div>
+  <div style="margin-top: 8px;"><span class="dashboard-sub">─── 评分 ─────────────────────────</span></div>
+  <div class="metric-row"><span class="metric-name">综合</span><span class="metric-value">58/100</span><span class="metric-trend"></span><span class="dot-yellow">🟡</span></div>
+  <div class="metric-row"><span class="metric-name">恢复</span><span class="metric-value">42/100</span><span class="metric-trend"></span><span class="dot-red">🔴</span></div>
+  <div class="metric-row"><span class="metric-name">睡眠</span><span class="metric-value">61/100</span><span class="metric-trend"></span><span class="dot-yellow">🟡</span></div>
+  <div class="metric-row"><span class="metric-name">运动</span><span class="metric-value">180min/周</span><span class="metric-trend"></span><span class="dot-green">🟢</span></div>
+  <div><span class="dashboard-sub">──────────────────────────────────</span></div>
+  <hr class="separator">
+  <div class="section-title">今日对比</div>
+  <div class="comparison-table">
+    <div class="row" style="margin-bottom: 4px;"><span class="label"></span><span class="col col-header">今天</span><span class="col col-header">基线</span><span class="col col-header">昨天</span><span class="col col-header">趋势</span></div>
+    <div class="row"><span class="label">HRV</span><span class="col">45ms</span><span class="col">49ms</span><span class="col">51ms</span><span class="col trend-bad">✗ 下降</span></div>
+    <div class="row"><span class="label">RHR</span><span class="col">58bpm</span><span class="col">56bpm</span><span class="col">54bpm</span><span class="col trend-bad">✗ 升高</span></div>
+    <div class="row"><span class="label">电量</span><span class="col">58</span><span class="col">70</span><span class="col">65</span><span class="col trend-bad">↓ 下降</span></div>
+    <div class="row"><span class="label">睡眠</span><span class="col">65分</span><span class="col">75分</span><span class="col">72分</span><span class="col trend-bad">✗ 下降</span></div>
+  </div>
+  <div class="heatmap-title">HRV 7天 (基线: 49ms)</div>
+  <div class="heatmap-values"> 51   49   52   48   50   45   45</div>
+  <div class="heatmap-baseline"> <span class="trend-good">🟢</span>   <span style="color:#565f89">──</span>   <span class="trend-good">🟢</span>   <span class="trend-bad">🔴</span>   <span class="trend-good">🟢</span>   <span class="trend-bad">🔴</span>   <span class="trend-bad">🔴</span></div>
+  <div class="heatmap-delta"> +2    0   +3   -1   +1   -4   -4</div>
+  <div style="height: 16px;"></div>
+  <div class="heatmap-title">睡眠评分 7天 (基线: 75分)</div>
+  <div class="heatmap-values"> 78   72   74   70   72   65   65</div>
+  <div class="heatmap-baseline"> <span class="trend-good">🟢</span>   <span class="trend-bad">🔴</span>   <span style="color:#565f89">──</span>   <span class="trend-bad">🔴</span>   <span style="color:#565f89">──</span>   <span class="trend-bad">🔴</span>   <span class="trend-bad">🔴</span></div>
+  <div class="heatmap-delta"> +3   -3   -1   -5   -3  -10  -10</div>
+  <div style="height: 16px;"></div>
+  <div class="heatmap-title">电量 7天 (基线: 70)</div>
+  <div class="heatmap-values"> 72   68   75   78   70   65   58</div>
+  <div class="heatmap-baseline"> <span style="color:#565f89">──</span>   <span class="trend-bad">🔴</span>   <span class="trend-good">🟢</span>   <span class="trend-good">🟢</span>   <span style="color:#565f89">──</span>   <span class="trend-bad">🔴</span>   <span class="trend-bad">🔴</span></div>
+  <div class="heatmap-delta"> +2   -2   +5   +8    0   -5  -12</div>
+  <hr class="separator">
+  <div class="analysis">
+    <p>HRV 连续 2 天低于基线，今天 45ms 比基线 49ms 低 8%，加上 RHR 从 54 升到 58bpm，这是典型的疲劳信号——身体还在消化前几天的训练负荷。</p>
+    <p>睡眠质量连续下滑：评分从 78 跌到 65，昨晚只睡了 6h45m，深睡占比 14%（低于 15% 的正常线），说明恢复质量在打折扣。</p>
+    <p>电量 7 天走势最明显：72→68→75→78→70→65→58，今天跌到 58，已经低于 70 的训练推荐线，身体充电速度跟不上消耗。</p>
+  </div>
+  <hr class="separator">
+  <div><span class="rec-important">⚠️  重要：</span>恢复分只有 42，今晚务必 22:00 前入睡，明天取消或降低训练强度</div>
+  <div><span class="rec-important">⚠️  重要：</span>HRV + RHR 同时恶化，未来 2 天注意观察是否有感冒前兆</div>
+  <div><span class="rec-suggestion">💡  建议：</span>昨晚只睡 6h45m，今晚提前 30 分钟上床，确保 7.5h+</div>
+  <div><span class="rec-suggestion">💡  建议：</span>深睡偏低，睡前 1 小时停用电子设备，房间温度调到 20°C</div>
+  <div><span class="rec-good">✅  正常：</span>血氧 96% 在正常范围，压力 52 处于中等水平</div>
+  <hr class="separator">
+  <div class="checklist-header">📋 今日行动清单</div>
+  <div class="checklist-item">□ 取消或降低今天的训练计划，改为散步或拉伸</div>
+  <div class="checklist-item">□ 22:00 前放下手机，营造入睡环境</div>
+  <div class="checklist-item">□ 睡前 1 小时停用电子设备，房间温度调到 20°C</div>
+  <div class="checklist-item">□ 多喝水，观察明天是否有感冒症状</div>
+</div>
+</body>
+</html>

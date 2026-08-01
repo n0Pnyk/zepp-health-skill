@@ -79,6 +79,9 @@ def _fetch_all_data(
         resp_end = int(datetime.combine(target_date, datetime.max.time()).timestamp() * 1000)
         _call("respiratory_rate", client.get_respiratory_rate, resp_start, resp_end)
 
+        # HRV RMSSD for 7 days (independent minute-samples, vs readiness sleep_hrv)
+        _call("hrv_rmssd_7d", client.get_hrv, bb_start_ts, bb_end_ts, hrv_type="rmssd")
+
     # Execute all calls in parallel
     results: dict[str, Any] = {}
     errors: set[str] = set()
@@ -558,6 +561,15 @@ def generate_snapshot(
     resp_data = data.get("respiratory_rate")
     if resp_data:
         snapshot["today"]["respiratory_rate"] = resp_data[-1].breaths_per_minute
+
+    # Supplement HRV RMSSD (independent minute-sample data, 7-day)
+    hrv_data = data.get("hrv_rmssd_7d") or []
+    if hrv_data:
+        snapshot["today"]["hrv_rmssd"] = hrv_data[-1].hrv_value
+        snapshot["hrv_rmssd_7d"] = [
+            {"date": r.timestamp.strftime("%Y-%m-%d"), "rmssd_ms": r.hrv_value}
+            for r in hrv_data
+        ]
 
     # Supplement stress details
     if today_stress:
