@@ -57,6 +57,35 @@
 - 设备数据通常滞后 1 天（当天 08:00 前的数据要次日才全）
 - "今天"查询 respiratory_rate 可能为空，查 7 天范围一定有（7-25..7-31 实测 7 条）
 
+### WORKOUT_TYPES 运动类型映射（2026-08-01 修正）
+
+来源：H3llK33p3r/zepp-fit-extractor ActivityType 枚举 + 用户数据特征验证。
+
+| type | 名称 | 数据特征验证 |
+|------|------|-------------|
+| 1 | outdoor_running | ✅ 40条：HR136/pace0.36 |
+| 2 | walking | - |
+| 3 | cycling | - |
+| 4 | treadmill | - |
+| 5 | indoor_cycling | - |
+| **6** | **walking**（原错误为 elliptical） | ✅ 29条：HR95/步数2721/pace1.23=散步 |
+| 7 | climbing | - |
+| 8 | treadmill（原 trail_running） | ✅ 2条：有GPS距离3000/4000m |
+| 9 | outdoor_cycling（原 skiing） | ✅ 7条：步数≈132=骑行 |
+| 10 | snowboarding | ❓ 用户1条 dis=0/steps=1420 存疑 |
+| 14 | indoor_swimming | 补充 |
+| 16-22 | 游泳/瑜伽/划船等 | - |
+| 64 | strength_training | - |
+| 128 | hiit | - |
+| 192 | outdoor_running | ✅ 2条：HR151-170/步数4583-4969 |
+| 223 | other | - |
+
+**踩坑要点：**
+- type 6 旧代码误标 elliptical，用户 29 条散步记录全显示错——数据特征（低HR+高步数+慢pace）才是判定依据
+- type 9 步数≈0 是骑行铁证（骑行不产生步数）
+- 所有运动类型都从 /v1/sport/run/history.json 返回，其他 sport 段（/walking /ride 等）404
+- detail 端点 /v1/sport/run/detail.json 需要 trackid + source 双参数（只传 trackid 会 400）
+
 ## 验证脚本
 
 ```bash
