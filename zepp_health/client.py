@@ -944,7 +944,11 @@ class ZeppClient:
             "toDate": td.isoformat(),
         }
         result = self._get_json(BLOOD_PRESSURE_PATH, params)
-        items = result.get("items", [])
+        # This endpoint returns a bare list ([] when empty), not {"items": [...]}
+        if isinstance(result, list):
+            items = result
+        else:
+            items = result.get("items", [])
 
         records = []
         for item in items:
@@ -1048,7 +1052,14 @@ class ZeppClient:
         start_ts: int,
         end_ts: int,
     ) -> list[RespiratoryRateReading]:
-        """Get respiratory rate data."""
+        """Get respiratory rate data.
+
+        The API returns value={"measurements": "<base64>", "timeZone": ...}.
+        measurements decodes to one byte per minute (1440 bytes/day);
+        each byte is the breaths-per-minute value (12-16 is normal, 0 = invalid).
+        One reading per day is emitted using the average of valid samples,
+        matching analysis.py which consumes resp_data[-1] as today's value.
+        """
         items = self._get_v2_events(
             "RespiratoryRate", "real_data", start_ts, end_ts,
         )
@@ -1056,10 +1067,26 @@ class ZeppClient:
         for item in items:
             ts = self._normalize_timestamp(item.get("timestamp", 0))
             value = item.get("value", 0)
-            if not ts or not value:
+            if not ts:
                 continue
-            # value may be a dict (containing measurements) or a number
+
+            # value may be a dict (containing base64 measurements) or a number
             if isinstance(value, dict):
+                meas = value.get("measurements")
+                if meas:
+                    try:
+                        raw = base64.b64decode(meas)
+                        # One byte per minute; 0 = invalid/no data
+                        samples = [b for b in raw if b > 0]
+                        if samples:
+                            avg = sum(samples) / len(samples)
+                            readings.append(RespiratoryRateReading(
+                                timestamp=datetime.fromtimestamp(ts),
+                                breaths_per_minute=round(avg, 1),
+                            ))
+                            continue
+                    except Exception:
+                        pass
                 v = value.get("value") or value.get("rpm") or value.get("total", 0)
             else:
                 v = value
