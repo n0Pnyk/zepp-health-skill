@@ -82,6 +82,13 @@ def _fetch_all_data(
         # HRV RMSSD for 7 days (independent minute-samples, vs readiness sleep_hrv)
         _call("hrv_rmssd_7d", client.get_hrv, bb_start_ts, bb_end_ts, hrv_type="rmssd")
 
+        # Per-minute heart rate for today (band_data detail mode — ONLY daytime HR source)
+        _call("minute_hr_today", client.get_minute_heart_rate, target_date, target_date)
+
+        # Per-minute heart rate for 7-day trend (daily avg/max)
+        daily_trend_start = target_date - timedelta(days=6)
+        _call("minute_hr_7d", client.get_minute_heart_rate, daily_trend_start, target_date)
+
     # Execute all calls in parallel
     results: dict[str, Any] = {}
     errors: set[str] = set()
@@ -584,6 +591,30 @@ def generate_snapshot(
         snapshot["hrv_rmssd_7d"] = [
             {"date": r.timestamp.strftime("%Y-%m-%d"), "rmssd_ms": r.hrv_value}
             for r in hrv_data
+        ]
+
+    # Supplement per-minute heart rate (detail mode) — today + 7-day daily stats
+    minute_hr_today = data.get("minute_hr_today") or []
+    if minute_hr_today:
+        bpm_list = [r.bpm for r in minute_hr_today]
+        snapshot["today"]["heart_rate_daytime"] = {
+            "min": min(bpm_list),
+            "max": max(bpm_list),
+            "avg": round(sum(bpm_list) / len(bpm_list), 1),
+            "samples": len(bpm_list),
+        }
+    minute_hr_7d = data.get("minute_hr_7d") or []
+    if minute_hr_7d:
+        from collections import defaultdict
+        by_day: dict[str, list[int]] = defaultdict(list)
+        for r in minute_hr_7d:
+            by_day[r.timestamp.strftime("%Y-%m-%d")].append(r.bpm)
+        snapshot["heart_rate_daily_7d"] = [
+            {
+                "date": ds,
+                "min": min(v), "max": max(v), "avg": round(sum(v) / len(v), 1),
+            }
+            for ds, v in sorted(by_day.items())
         ]
 
     # Supplement stress details

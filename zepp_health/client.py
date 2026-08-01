@@ -273,6 +273,64 @@ class ZeppClient:
             raise ZeppClientError(f"API error: {result.get('message', 'Unknown error')}")
         return result.get("data", [])
 
+    def get_band_data_detail(
+        self,
+        start_date: date,
+        end_date: date,
+    ) -> list[dict]:
+        """Get detailed band data including per-minute heart rate.
+
+        Uses query_type=detail which adds `data_hr` (1440 bytes/day, one byte
+        per minute, 254/255 = invalid) and `data` (activity stages) fields
+        that the summary mode omits.
+        """
+        params = {
+            "query_type": "detail",
+            "device_type": "ios_phone",
+            "userid": self._user_id,
+            "from_date": start_date.isoformat(),
+            "to_date": end_date.isoformat(),
+        }
+        result = self._get_json(BAND_DATA_PATH, params)
+        if result.get("code") != 1:
+            raise ZeppClientError(f"API error: {result.get('message', 'Unknown error')}")
+        return result.get("data", [])
+
+    def get_minute_heart_rate(
+        self,
+        start_date: date,
+        end_date: date,
+    ) -> list[HeartRateData]:
+        """Get per-minute heart rate samples from band_data detail mode.
+
+        The detail response contains data_hr: base64 of 1440 bytes per day,
+        one byte per minute. 254/255 = invalid (not worn / no reading).
+        This is the ONLY source of daytime heart rate — /users/{uid}/heartRate
+        returns empty items on this account.
+        """
+        days = self.get_band_data_detail(start_date, end_date)
+        readings: list[HeartRateData] = []
+        for day in days:
+            date_str = day.get("date_time", "")
+            if not date_str:
+                continue
+            hr_b64 = day.get("data_hr", "")
+            if not hr_b64:
+                continue
+            try:
+                raw = base64.b64decode(hr_b64)
+            except Exception:
+                continue
+            base_dt = datetime.strptime(date_str, "%Y-%m-%d")
+            for minute, b in enumerate(raw):
+                if b >= 250:  # invalid
+                    continue
+                readings.append(HeartRateData(
+                    timestamp=base_dt + timedelta(minutes=minute),
+                    bpm=int(b),
+                ))
+        return readings
+
     def get_daily_data(
         self,
         start_date: date,
