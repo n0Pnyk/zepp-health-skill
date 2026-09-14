@@ -71,7 +71,7 @@ python3 scripts/health_snapshot.py --date 2026-05-18 # Specific date
 
 | Mode | Recommendations | Personalization | Dependencies |
 |------|----------------|-----------------|--------------|
-| [zepp-health CLI](https://github.com/n0Pnyk/zepp-health) | Rule engine | Generic | Python |
+| [zepp-health CLI](https://github.com/n0Pnyk/zepp-health-analytics) | Rule engine | Generic | Python |
 | zepp-health-skill | LLM analysis | Highly personalized | LLM service |
 
 ### Syncing Core Library
@@ -166,7 +166,7 @@ python3 scripts/health_snapshot.py --date 2026-05-18  # 指定日期
 
 | 模式 | 建议来源 | 个性化程度 | 依赖 |
 |------|----------|------------|------|
-| [zepp-health CLI](https://github.com/n0Pnyk/zepp-health) | 规则引擎 | 通用 | Python |
+| [zepp-health CLI](https://github.com/n0Pnyk/zepp-health-analytics) | 规则引擎 | 通用 | Python |
 | zepp-health-skill | LLM 分析 | 高度个性化 | LLM 服务 |
 
 ### 同步核心库
