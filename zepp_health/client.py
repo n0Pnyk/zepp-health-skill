@@ -281,7 +281,7 @@ class ZeppClient:
         """Get detailed band data including per-minute heart rate.
 
         Uses query_type=detail which adds `data_hr` (1440 bytes/day, one byte
-        per minute, 254/255 = invalid) and `data` (activity stages) fields
+        per minute, 0/254/255 = invalid) and `data` (activity stages) fields
         that the summary mode omits.
         """
         params = {
@@ -304,7 +304,7 @@ class ZeppClient:
         """Get per-minute heart rate samples from band_data detail mode.
 
         The detail response contains data_hr: base64 of 1440 bytes per day,
-        one byte per minute. 254/255 = invalid (not worn / no reading).
+        one byte per minute. 0/254/255 = invalid (not worn / no reading).
         This is the ONLY source of daytime heart rate — /users/{uid}/heartRate
         returns empty items on this account.
         """
@@ -323,7 +323,7 @@ class ZeppClient:
                 continue
             base_dt = datetime.strptime(date_str, "%Y-%m-%d")
             for minute, b in enumerate(raw):
-                if b >= 250:  # invalid
+                if b == 0 or b >= 250:  # invalid (0/254/255 = HR_BYTE_SENTINELS, 2026-08-31 修正：0 也是无效值)
                     continue
                 readings.append(HeartRateData(
                     timestamp=base_dt + timedelta(minutes=minute),
@@ -1205,11 +1205,9 @@ class ZeppClient:
                     except Exception:
                         pass
                 v = value.get("value") or value.get("rpm") or value.get("total", 0)
-            else:
-                v = value
-            if v:
-                readings.append(RespiratoryRateReading(
-                    timestamp=datetime.fromtimestamp(ts),
-                    breaths_per_minute=float(v),
-                ))
+                if v:
+                    readings.append(RespiratoryRateReading(
+                        timestamp=datetime.fromtimestamp(ts),
+                        breaths_per_minute=float(v),
+                    ))
         return readings
