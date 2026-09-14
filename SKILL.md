@@ -34,7 +34,7 @@ Configure Zepp API authentication (by priority):
 2. Environment variable `ZEPP_COOKIE` — cookie string
 3. Environment variables `ZEPP_APP_TOKEN` + `ZEPP_USER_ID`
 
-Get cookie: visit https://user.huami.com/privacy2/#/confirmExportData, log in, open DevTools (F12) → Network, refresh, find a request to `api-mifit*.zepp.com`, copy `apptoken` from headers and `userid` from URL/params.
+Get cookie: open https://user.huami.com/privacy2/index.html, log in, then DevTools (F12) → **Application** → **Cookies** → `user.huami.com`, and copy `apptoken` and `userid`. No packet capture, proxy, root, or phone needed. (Alternative: F12 → Network, refresh, find a request to `api-mifit*.zepp.com`, copy `apptoken` from headers and `userid` from URL/params.)
 
 ## Analysis Framework
 

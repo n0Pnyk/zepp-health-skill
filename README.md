@@ -27,9 +27,18 @@ cp config.example.json config.json
 export ZEPP_COOKIE="userid=xxx; apptoken=xxx; region=1"
 ```
 
-Get your cookie: visit [user.huami.com/privacy2](https://user.huami.com/privacy2/#/confirmExportData), log in, open browser DevTools (F12) → Network tab, refresh the page, find a request to `api-mifit*.zepp.com`, and copy `apptoken` from request headers and `userid` from the URL or query parameters.
+Get your cookie: open [user.huami.com/privacy2](https://user.huami.com/privacy2/index.html), log in, then open browser DevTools (F12) → **Application** tab → **Cookies** → `user.huami.com`, and copy the `apptoken` and `userid` values. No packet capture, no proxy, no root, no phone needed — a desktop browser is enough.
 
-> **Note:** `app.zepp.com` is no longer accessible. The correct URL is `user.huami.com/privacy2`. Also, `apptoken` and `userid` are injected via the Zepp App's JSBridge (KeepAlive SDK) only when opened inside the Zepp mobile app's WebView. If you open the page in a regular desktop browser, the token will be empty. Use the method above — open DevTools on the `user.huami.com` page directly in your desktop browser to capture the token from API requests.
+<details>
+<summary>Alternative: capture from a network request</summary>
+
+F12 → Network tab, refresh the page, find a request to `api-mifit*.zepp.com`, copy `apptoken` from the request headers and `userid` from the URL or query parameters.
+
+</details>
+
+> **Note:** `app.zepp.com` is no longer accessible. The correct URL is `user.huami.com/privacy2`. Also, `apptoken` and `userid` are injected via the Zepp App's JSBridge (KeepAlive SDK) only when opened inside the Zepp mobile app's WebView — in a plain desktop browser the JSBridge injection never happens, so read them from the page's own cookies as described above.
+
+> Token expires after ~30 days. When data returns null, re-extract a new token.
 
 ### Usage
 
@@ -113,9 +122,18 @@ cp config.example.json config.json
 export ZEPP_COOKIE="userid=xxx; apptoken=xxx; region=1"
 ```
 
-获取 cookie：访问 [user.huami.com/privacy2](https://user.huami.com/privacy2/#/confirmExportData)，登录后打开浏览器 DevTools（F12）→ Network 标签，刷新页面，找到发往 `api-mifit*.zepp.com` 的请求，从请求头复制 `apptoken`，从 URL 或参数中复制 `userid`。
+获取 cookie：打开 [user.huami.com/privacy2](https://user.huami.com/privacy2/index.html) 并登录，然后 DevTools（F12）→ **Application** 标签 → **Cookies** → `user.huami.com`，复制 `apptoken` 和 `userid` 两个值。无需抓包、无需代理、无需 root、无需手机，一个桌面浏览器即可。
 
-> **注意：** `app.zepp.com` 已不可访问，正确地址是 `user.huami.com/privacy2`。另外，`apptoken` 和 `userid` 由 Zepp App 的 JSBridge（KeepAlive SDK）注入，只有在手机 Zepp App 内置 WebView 中打开时才会自动带上。用普通桌面浏览器打开这个页面时 token 是空的。正确做法：在桌面浏览器直接打开 `user.huami.com` 页面，登录后在 DevTools 的 Network 中抓取 API 请求里的 token。
+<details>
+<summary>备选：从网络请求中抓取</summary>
+
+F12 → Network 标签，刷新页面，找到发往 `api-mifit*.zepp.com` 的请求，从请求头复制 `apptoken`，从 URL 或参数中复制 `userid`。
+
+</details>
+
+> **注意：** `app.zepp.com` 已不可访问，正确地址是 `user.huami.com/privacy2`。另外，`apptoken` 和 `userid` 由 Zepp App 的 JSBridge（KeepAlive SDK）注入，仅在手机 Zepp App 内置 WebView 中打开时才会自动带上——桌面浏览器里不会发生该注入，请按上面的方式从页面自身的 Cookie 中读取。
+
+> Token 有效期约 30 天。数据返回 null 时，重新提取一次 token。
 
 ### 使用
 
