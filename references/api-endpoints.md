@@ -75,6 +75,7 @@
 | 10 | snowboarding | ❓ 用户1条 dis=0/steps=1420 存疑 |
 | 14 | indoor_swimming | 补充 |
 | 16-22 | 游泳/瑜伽/划船等 | - |
+| **52** | **strength_training** | ✅ 1条(MILI_MONACO)：strength_training_group=[{actionType:0,count:374}]、strengthScores=[75,77,82,80,73]、total_group、restTimeBetweenGroups；dis=0、cadence=-1 |
 | 64 | strength_training | - |
 | 128 | hiit | - |
 | 192 | outdoor_running | ✅ 2条：HR151-170/步数4583-4969 |
